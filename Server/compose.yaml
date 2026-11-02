@@ -1,0 +1,36 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - nosce_data:/data
+      - ./secrets:/run/secrets:ro
+    networks: [private]
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz',timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+  proxy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    environment:
+      NOSCE_DOMAIN: ${NOSCE_DOMAIN:?Set NOSCE_DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [private]
+    depends_on: [api]
+networks:
+  private:
+volumes:
+  nosce_data:
+  caddy_data:
+  caddy_config:

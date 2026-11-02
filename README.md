@@ -1,60 +1,17 @@
-# Nosce Island
+# Nosce Island 0.6.0
 
-A lightweight iPhone market companion with a Dynamic Island interface and a mobile web preview.
+本版同步提供原生 iOS 工程与可部署到 Vercel 的真实管理后台。请先阅读 **Vercel部署与Xcode联调.md**。
 
-轻量行情 App，采用深色与薄荷绿波形标志，行情来源为 Hyperliquid。
+- 后台：管理员账号密码，动态码可选；手机密码自动填充、显示/隐藏密码、登录反馈和记录卡片。无默认密码，不使用离线预览冒充管理后台。
+- 数据：Vercel 使用 PostgreSQL 持久化会话、用户、订单、会员与活动；本地 SQLite 仍用于旧单进程部署和测试。Vercel 明确拒绝本地临时数据库。
+- 运行：短请求 API 与持续 market worker 分开，跨进程共享目录/报价/订阅；后台任务心跳参与 readiness。
+- 支付：仅苹果内购；服务端验签和归属验证、恢复购买、续费/退款处理。App 保持免登录；售卖开关默认关闭，未设置正式商品与价格。
+- App：保留最多 8 个关注资产、每组 2 个，公开真实行情直接连接；恢复前台会同步会员状态，购买失败明确反馈，显示订阅期限与自动续费说明。
 
-## Downloads / 文件下载
+部署文件在源码根目录：app.py、vercel.json、pyproject.toml、requirements.txt、Vercel.env.example。Xcode 打开 NosceIsland.xcodeproj。额外的 Admin-Preview.html 仅供静态查看布局，不是正式后台登录入口。
 
-| File | Contents |
-| --- | --- |
-| [NosceIsland-iOS-Alpha-0.2.zip](NosceIsland-iOS-Alpha-0.2.zip) | 原生 iOS 工程、ActivityKit 扩展、图标、接口模型与测试资料；不是已签名 IPA |
-| [nosce-island-preview.html](nosce-island-preview.html) | 手机交互预览源码，单文件 HTML，无构建依赖 |
-| [Nosce-Island-source.zip](Nosce-Island-source.zip) | 整理好的完整源码目录：`ios/`、`preview/`、安装说明及 `.gitignore` |
+没有执行 Vercel 云端部署、Xcode 编译、真机 APNs 或真实 StoreKit 付款；对应操作需你的账号与环境。本仓库包含解压后的完整源码，可直接由 Vercel 导入；旧版 ZIP 与 HTML 仅为历史文件。
 
-## Mobile preview / 手机交互预览
+## Vercel 快速开始
 
-[Open the hosted interactive preview / 打开手机预览](https://nosce-island-mobile.brawnypixie21.chatgpt.site/)
-
-The hosted preview may require sign-in with the owner's ChatGPT account. You can switch screens, manage two watchlist assets, expand the simulated island, change appearance/language, and enable Hyperliquid live data.
-
-网页中的灵动岛是模拟展示，不能控制 iPhone 系统灵动岛。示例模式中的价格与图表不代表当前市场。
-
-To run the web preview locally, extract `Nosce-Island-source.zip` and run:
-
-```bash
-python3 -m http.server 8080 --directory preview
-```
-
-Open `http://localhost:8080` on the computer. A phone on the same network can use a reachable address of that computer.
-
-## Native iOS alpha / 原生测试
-
-1. Download and extract `NosceIsland-iOS-Alpha-0.2.zip`.
-2. Open `NosceIsland.xcodeproj` in an Xcode version supporting your iPhone's iOS version.
-3. Choose the `NosceIsland` scheme.
-4. Set the same signing team for both the App and Live Activity extension, then connect your iPhone and run.
-5. Read the included `README-先读我.md` for full installation and testing instructions.
-
-The package contains source code, not an App Store release or signed installation package. It has not yet been compiled in Xcode or verified on an iPhone. Swift syntax, project/resource structure, and live Hyperliquid REST/WebSocket message shapes have been checked.
-
-## Market data / 行情说明
-
-- Hyperliquid public API and WebSocket `activeAssetCtx`.
-- Perpetual mark price (`markPx`), with 24h change calculated against `prevDayPx`.
-- Native app discovers markets using `perpDexs` and each market's `meta`; the preview refreshes native and `xyz` markets.
-- Full market-prefixed IDs remain distinct across markets.
-- Equity-linked contracts are not official stock exchange quotes. Hong Kong coverage depends on actual listings; US/HK symbols are not silently mapped.
-- Displayed times indicate local receipt, not exchange trade timestamps.
-
-## Current limitations / 当前边界
-
-本地 iOS 版进入后台后停止行情连接，并标记过期数据。持续后台灵动岛行情还需要服务器和 Apple ActivityKit/APNs 推送配置，本版尚未包含。
-
-No trading, account system, payments, ads, portfolio or price-alert backend is implemented. The web prototype does not imply native feature parity.
-
-## Official references
-
-- https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint/perpetuals
-- https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions
-- https://developer.apple.com/documentation/ActivityKit
+导入 evanpanan/Nosce-Island，分支 main，Root Directory 保持仓库根目录。连接 PostgreSQL 并设置 DATABASE_URL、TOKEN_ENCRYPTION_KEY、ADMIN_USERNAME、ADMIN_PASSWORD 后部署。管理入口为 /admin，详细步骤见 Vercel部署与Xcode联调.md。

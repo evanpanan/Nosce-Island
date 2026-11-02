@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "app.py": {
+      "maxDuration": 60,
+      "includeFiles": "Server/nosce/**"
+    }
+  },
+  "daemons": {
+    "market-worker": {
+      "root": "Server/",
+      "entrypoint": "Dockerfile.worker",
+      "instances": {
+        "iad1": 1
+      },
+      "livenessProbe": {
+        "httpGet": {
+          "port": 8080,
+          "path": "/health"
+        },
+        "initialDelaySeconds": 30
+      }
+    }
+  }
+}

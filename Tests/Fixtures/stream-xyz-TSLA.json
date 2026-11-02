@@ -1,0 +1,21 @@
+{
+  "channel": "activeAssetCtx",
+  "data": {
+    "coin": "xyz:TSLA",
+    "ctx": {
+      "funding": "-0.0000118623",
+      "openInterest": "97416.034",
+      "prevDayPx": "399.13",
+      "dayNtlVlm": "1885264.2942500003",
+      "premium": "-0.0005552499",
+      "oraclePx": "399.82",
+      "markPx": "399.63",
+      "midPx": "399.615",
+      "impactPxs": [
+        "399.547",
+        "399.649"
+      ],
+      "dayBaseVlm": "4714.938"
+    }
+  }
+}

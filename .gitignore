@@ -1,0 +1,11 @@
+.DS_Store
+DerivedData/
+*.xcuserstate
+xcuserdata/
+.env
+Server/secrets/
+*.p8
+*.sqlite*
+__pycache__/
+.pytest_cache/
+.venv/

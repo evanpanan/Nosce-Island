@@ -1,0 +1,19 @@
+{
+  "quotes": [
+    {
+      "id": "hl:BTC",
+      "symbol": "BTC",
+      "price": 77837.0,
+      "change": 0.31187576519104976,
+      "currency": "USD",
+      "updatedAt": "2026-11-02T00:00:00Z",
+      "receivedAt": "2026-11-02T00:00:00Z",
+      "source": "Hyperliquid",
+      "basis": "mark",
+      "delaySeconds": 0,
+      "marketState": "open"
+    }
+  ],
+  "redUp": false,
+  "foregroundOnly": false
+}

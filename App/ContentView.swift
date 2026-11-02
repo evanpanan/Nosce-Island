@@ -1,0 +1,263 @@
+import SwiftUI
+import StoreKit
+
+struct ContentView: View {
+    @EnvironmentObject var store: MarketStore
+    @EnvironmentObject var commerce: CommerceStore
+    @State private var tab = 0
+    @State private var search = ""
+    @State private var market = "All"
+    
+    var body: some View {
+        TabView(selection: $tab) {
+            NavigationStack { dashboard }
+                .tabItem { Label(tr("盯盘", "Watch"), systemImage: "waveform.path") }.tag(0)
+            NavigationStack { instruments }
+                .tabItem { Label(tr("自选", "Watchlist"), systemImage: "star") }.tag(1)
+            NavigationStack { settings }
+                .tabItem { Label(tr("设置", "Settings"), systemImage: "slider.horizontal.3") }.tag(2)
+        }
+        .tint(.mint)
+        .task { store.startRefreshing(); await commerce.start() }
+        .alert(tr("提示", "Notice"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
+            Button(tr("知道了", "OK")) { store.message = nil }
+        } message: { Text(store.message ?? "") }
+    }
+    private var dashboard: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                HStack {
+                    HStack(spacing: 8) { Image("WaveMark").resizable().scaledToFit().frame(width: 28, height: 28); Text("NOSCE ISLAND").font(.caption.bold()).tracking(2) }
+                    Spacer()
+                    Text("0.6.0").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                }.foregroundStyle(.mint)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(tr("行情，抬眼即见。", "Markets. At a glance.")).font(.largeTitle.bold())
+                    Text(tr("无强制广告 · 无付费倒计时", "No forced ads. No paid countdown."))
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }
+                VStack(spacing: 20) {
+                    HStack {
+                        Text(tr("灵动岛预览", "ISLAND PREVIEW")).font(.caption.bold()).foregroundStyle(.secondary)
+                        Spacer()
+                        Text(tr("真实行情", "MARKET DATA"))
+                            .font(.caption2.bold()).foregroundStyle(.mint)
+                    }
+                    VStack(spacing:3) {
+                        ForEach(store.visibleInstruments) { item in
+                            HStack(spacing:8) {
+                                Image("WaveMark").resizable().scaledToFit().frame(width:16,height:16)
+                                Text(item.symbol).font(.caption.bold())
+                                Spacer(minLength:4)
+                                Text(store.quotes[item.id]?.formattedPrice ?? "—")
+                                    .font(.caption.monospacedDigit().bold()).lineLimit(1).minimumScaleFactor(0.6)
+                            }
+                        }
+                    }.padding(.horizontal,20).padding(.vertical,10)
+                        .background(.black,in:RoundedRectangle(cornerRadius:24)).padding(.horizontal,20)
+                    HStack {
+                        Image(systemName: "hand.draw").foregroundStyle(.secondary)
+                        Text(tr("最多 8 个资产，每组 2 个；长按查看当前组。", "Up to 8 assets in groups of 2; hold the island to expand."))
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }.padding(20).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 26))
+                HStack {
+                    Text(tr("正在关注", "Your watch")).font(.title3.bold())
+                    Spacer()
+                    Button { tab = 1 } label: { Image(systemName: "plus.circle").font(.title3) }
+                        .accessibilityLabel(tr("添加资产", "Add instrument"))
+                }
+                Text(store.connection).font(.caption).foregroundStyle(.secondary)
+                ForEach(store.chosen) { item in quoteCard(item) }
+                VStack(alignment: .leading, spacing: 10) {
+                    Label(tr("行情来源与更新状态", "Market source and update status"), systemImage: "info.circle").font(.subheadline.bold())
+                    Text(tr("币安与 Hyperliquid 显示永续合约标记价；独立股票报价仅在授权数据源启用时提供。App 内行情直接连接数据源；灵动岛后台持续更新需要上线推送服务。延迟、休市和过期状态会单独标明。", "Binance and Hyperliquid show perpetual mark prices. Exchange stock quotes require an enabled licensed feed. In-app quotes connect directly to the source. Background island updates require the push service. Delays, closed markets and stale prices are labelled."))
+                        .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.mint.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
+                Button {
+                    Task { if store.activityRunning { await store.endActivity() } else { await store.startActivity() } }
+                } label: {
+                    Label(store.activityRunning ? tr("结束盯盘", "Stop watching") : tr("显示到灵动岛", "Show on Dynamic Island"),
+                          systemImage: store.activityRunning ? "stop.circle" : "waveform.path")
+                        .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 19)
+                }.buttonStyle(.borderedProminent).tint(store.activityRunning ? .gray : .mint).foregroundStyle(.black)
+                    .disabled(store.activityStarting)
+                Text(store.lastActivityResult).font(.caption).foregroundStyle(.secondary)
+                if store.activityRunning {
+                    Text(tr("请返回桌面或切换到其他 App 查看；系统决定实时活动的显示位置。", "Return to Home or another app to check; iOS controls presentation."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Text(tr("实时活动受 iOS 管理，单次最长 8 小时；本版不人为缩短。", "iOS manages Live Activities, with an 8-hour maximum per session. No shorter app-imposed timer."))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }.padding(20)
+        }.background(Color(red: 0.035, green: 0.045, blue: 0.055)).toolbar(.hidden, for: .navigationBar)
+    }
+    private func quoteCard(_ item: Instrument) -> some View {
+        let quote = store.quotes[item.id]
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(item.symbol).font(.headline)
+                    Text(item.name + " · " + item.typeLabel + (item.exchange.isEmpty ? "" : " · " + item.exchange)).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(quote?.formattedPrice ?? "—").font(.title3.monospacedDigit().bold())
+                    Text((quote?.formattedChange ?? "—") + " · " + (quote?.basis == "last" ? tr("日涨跌", "DAY") : "24h")).font(.caption.monospacedDigit()).foregroundStyle(store.color(quote?.change))
+                }
+            }
+            if let points = store.history[item.id], points.count > 1 {
+                Sparkline(values: points).stroke(.mint, style: StrokeStyle(lineWidth: 2, lineCap: .round)).frame(height: 44)
+                Text(tr("本次打开期间采样", "Samples since opening")).font(.caption2).foregroundStyle(.secondary)
+            }
+            if !item.settlementCurrency.isEmpty && item.settlementCurrency != item.currency {
+                Text(item.currency + tr(" 计价 · ", " price · ") + item.settlementCurrency + tr(" 结算", " settlement"))
+                    .font(.caption2).foregroundStyle(.secondary)
+            }
+            if let error = store.errors[item.id] {
+                Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.orange)
+            }
+            if let quote {
+                TimelineView(.periodic(from: .now, by: 5)) { context in
+                    HStack {
+                        Circle().fill(quote.isStale(at: context.date) ? .orange : .mint).frame(width: 5, height: 5)
+                        Text(quote.source + " · " + quote.statusLabel + " · " + quote.updatedAt.formatted(date: .omitted, time: .standard))
+                            .font(.caption2).foregroundStyle(.secondary)
+                        if quote.isStale(at: context.date) { Text(tr("过期", "STALE")).font(.caption2.bold()).foregroundStyle(.orange) }
+                    }
+                }
+            } else if store.loading { ProgressView().controlSize(.small) } else { Text(tr("暂时没有有效报价，正在重连。", "No valid quote yet. Reconnecting.")).font(.caption).foregroundStyle(.secondary) }
+        }.padding(18).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 20))
+    }
+    private var instruments: some View {
+        List {
+            Section {
+                Picker(tr("市场", "Market"), selection: $market) {
+                    Text(tr("全部", "All")).tag("All")
+                    Text(tr("加密", "Crypto")).tag("Crypto")
+                    Text(tr("合约", "Perps")).tag("Contracts")
+                    Text(tr("美股", "US")).tag("US")
+                    Text(tr("港股", "HK")).tag("HK")
+                }.pickerStyle(.segmented)
+            }
+            Section {
+                Text(tr("直接搜索并添加想看的资产。名称下方标明报价类型与来源。", "Search and add an asset. The quote type and source appear below its name."))
+                    .font(.caption).foregroundStyle(.secondary)
+                if store.catalogLoading { ProgressView(tr("正在加载市场…", "Loading markets…")) }
+                if let notice = store.catalogNotice { Text(notice).font(.caption).foregroundStyle(.orange) }
+                Button(tr("刷新市场列表", "Reload markets")) { store.reloadCatalog() }.disabled(store.catalogLoading)
+            }
+            Section(tr("已选择 · 点按移除", "Selected · tap to remove")) {
+                ForEach(store.chosen) { item in
+                    Button { store.toggle(item) } label: {
+                        HStack { Text(item.id); Spacer(); Image(systemName: "minus.circle") }
+                    }
+                }
+            }
+            Section(tr("最多关注 8 个资产 · 灵动岛每组 2 个", "Follow up to 8 · island shows groups of 2")) {
+                ForEach(store.catalog.filter {
+                    (market == "All" || $0.market == market || ($0.market == "Contracts" && $0.region == market)) &&
+                    (search.isEmpty || ($0.id + " " + $0.name).localizedCaseInsensitiveContains(search))
+                }) { item in
+                    Button { store.toggle(item) } label: {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.symbol).font(.headline).foregroundStyle(.primary)
+                                Text(item.name + " · " + item.typeLabel + (item.exchange.isEmpty ? "" : " · " + item.exchange))
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: store.selected.contains(item.id) ? "checkmark.circle.fill" : "plus.circle")
+                        }.padding(.vertical, 6)
+                    }.accessibilityLabel(item.symbol + (store.selected.contains(item.id) ? tr(" 已选择", " selected") : tr(" 添加", " add")))
+                }
+            }
+        }.navigationTitle(tr("自选行情", "Watchlist"))
+            .searchable(text: $search, prompt: tr("搜索代码或英文名称", "Symbol or name"))
+    }
+    private var settings: some View {
+        Form {
+            membershipSection
+            Section(tr("显示", "Display")) {
+                Toggle(tr("红涨绿跌", "Red for gains"), isOn: $store.redUp)
+                    .onChange(of: store.redUp) { value in
+                        UserDefaults.standard.set(value, forKey: "redUp")
+                        Task { await store.updateActivity() }
+                    }
+                LabeledContent(tr("语言", "Language"), value: tr("跟随系统", "System"))
+                LabeledContent(tr("币种", "Currency"), value: tr("按品种 USD / HKD / USDT", "Native USD / HKD / USDT"))
+            }
+            Section(tr("数据管理", "Data management")) {
+                Button(tr("删除设备服务数据", "Delete device service data"), role: .destructive) { Task { await store.deleteServiceData() } }
+            }
+            Section {
+                Text("Nosce Island · 0.6.0").font(.subheadline.bold())
+                Text(tr("合约：币安 / Hyperliquid 标记价，无同口径参考价时不显示涨跌幅。独立股票：Twelve Data 报价与前收盘涨跌。币安和股票保留上游报价时间；Hyperliquid 显示服务器接收时间。", "Perpetuals: Binance / Hyperliquid mark prices; change is unavailable without a matching reference. Exchange stocks: Twelve Data quotes and change from previous close. Binance and stocks preserve upstream timestamps; Hyperliquid uses server receipt time."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }.navigationTitle(tr("设置", "Settings"))
+
+    }
+    private func subscriptionPeriod(_ product: Product) -> String {
+        guard let period=product.subscription?.subscriptionPeriod else { return "" }
+        let unit: String
+        switch period.unit {
+        case .day:unit=tr("天","day(s)")
+        case .week:unit=tr("周","week(s)")
+        case .month:unit=tr("个月","month(s)")
+        case .year:unit=tr("年","year(s)")
+        @unknown default:return ""
+        }
+        return " / \(period.value) \(unit)"
+    }
+    private var membershipSection: some View {
+        Section(tr("会员", "Membership")) {
+            LabeledContent(tr("当前版本", "Current plan"), value: commerce.profile?.pro == true ? "Pro" : tr("免费版", "Free"))
+            Text(tr("免注册 · 免登录 · 无广告", "No registration · No app sign-in · No ads"))
+                .font(.caption).foregroundStyle(.secondary)
+            if let expiry = commerce.profile?.expiresAt, commerce.profile?.pro == true {
+                LabeledContent(tr("会员到期", "Expires"), value: Date(timeIntervalSince1970:expiry).formatted(date:.abbreviated,time:.omitted))
+            }
+            ForEach(commerce.products,id:\.id) { product in
+                Button { Task { await commerce.purchase(product) } } label: {
+                    VStack(alignment:.leading,spacing:4) {
+                        Text(product.displayName + " · " + product.displayPrice + subscriptionPeriod(product))
+                        Text(product.description).font(.caption).foregroundStyle(.secondary)
+                    }
+                }.disabled(commerce.busy)
+            }
+            if !commerce.products.isEmpty {
+                Text(tr("通过 App Store 购买。订阅将自动续费，可在苹果设置中管理或取消。", "Billed by the App Store. Subscriptions renew automatically; manage or cancel them in Apple Settings."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if commerce.products.isEmpty {
+                Text(tr("基础功能免费，高级功能即将推出。", "Basic features are free. More features are coming."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Button(tr("恢复购买", "Restore purchases")) { Task { await commerce.restore() } }.disabled(commerce.busy)
+            if commerce.profile?.pro == true {
+                Link(tr("管理订阅", "Manage subscription"), destination:URL(string:"https://apps.apple.com/account/subscriptions")!)
+            }
+            if let raw = commerce.profile?.privacyURL, let url = URL(string:raw) { Link(tr("隐私政策", "Privacy policy"),destination:url) }
+            if let raw = commerce.profile?.termsURL, let url = URL(string:raw) { Link(tr("订阅条款", "Subscription terms"),destination:url) }
+            if let notice = commerce.notice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+        }
+    }
+
+}
+
+struct Sparkline: Shape {
+    let values: [Double]
+    func path(in rect: CGRect) -> Path {
+        guard values.count > 1, let low = values.min(), let high = values.max() else { return Path() }
+        let span = max(high - low, 0.000001)
+        return Path { path in
+            for (index, value) in values.enumerated() {
+                let point = CGPoint(x: CGFloat(index) / CGFloat(values.count - 1) * rect.width,
+                                    y: rect.height - CGFloat((value - low) / span) * rect.height)
+                if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
+            }
+        }
+    }
+}
