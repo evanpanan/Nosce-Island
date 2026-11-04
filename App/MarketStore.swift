@@ -34,6 +34,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     lazy var commerce = CommerceStore(api:api)
     private var streamTask: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
+    private var mixedPublicTask: Task<Void, Never>?
     private var presenceTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var discoveryTask: Task<Void, Never>?
@@ -82,11 +83,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         return Array(chosen.dropFirst(index).prefix(1))
     }
     func color(_ change: Double?) -> Color {
-        switch IslandQuote.priceTone(change: change, redUp: redUp) {
-        case .green: return .green
-        case .red: return .red
-        case .neutral: return .secondary
-        }
+        MarketPalette.price(IslandQuote.priceTone(change: change, redUp: redUp))
     }
     func toggle(_ item: Instrument) {
         if activityRunning || activityStarting {
@@ -138,50 +135,43 @@ func tr(_ chinese: String, _ english: String) -> String {
                         }
                         throw URLError(.networkConnectionLost)
                     }
-                    let status = try await self.api.status()
-                    guard !Task.isCancelled, self.generation == generation else { return }
-                    self.stocksEnabled = status.stocksEnabled
-                    self.backgroundStatus = status.backgroundPush ? tr("后台服务已配置", "Background service configured") : tr("后台服务未配置", "Background service not configured")
-                    // Catalog also refreshes expired installation credentials before opening a socket.
-                    let (items, enabled) = try await self.api.catalog()
-                    guard !Task.isCancelled, self.generation == generation else { return }
-                    self.catalog = items; self.stocksEnabled = enabled
-                    let missing = self.selected.filter { id in !items.contains { $0.id == id } }
-                    guard missing.isEmpty else { throw ServiceError.unavailable(422) }
-                    let socket = try await self.api.socket(symbols: self.selected)
-                    self.socket = socket
-                    self.lastFrameAt = Date()
-                    self.connection = tr("已连接行情服务", "Connected to market service")
-                    self.heartbeat = Task {
-                        while !Task.isCancelled {
-                            do {
-                                try await Task.sleep(for: .seconds(15))
-                                if Date().timeIntervalSince(self.lastFrameAt) > 30 { socket.cancel(with: .goingAway, reason: nil); return }
-                                try await socket.send(.string("ping"))
+                    let stockIDs = self.selected.filter { $0.hasPrefix("stock:") }
+                    guard !stockIDs.isEmpty else { throw ServiceError.unavailable(422) }
+                    let publicItems = self.chosen.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") }
+                    self.mixedPublicTask?.cancel()
+                    if !publicItems.isEmpty {
+                        self.mixedPublicTask = Task { [weak self] in
+                            guard let self else { return }
+                            while !Task.isCancelled, self.generation == generation {
+                                do {
+                                    try await PublicMarketFeed.stream(publicItems) { [weak self] quote in
+                                        guard let self, self.generation == generation else { return }
+                                        self.acceptQuote(quote)
+                                    }
+                                } catch { if Task.isCancelled { return } }
+                                do { try await Task.sleep(for: .seconds(3)) } catch { return }
                             }
-                            catch { socket.cancel(with: .goingAway, reason: nil); return }
                         }
                     }
-                    while !Task.isCancelled && self.generation == generation {
-                        let message = try await socket.receive()
+                    while !Task.isCancelled, self.generation == generation {
+                        let frame = try await self.api.stockQuotes(symbols: stockIDs)
                         guard !Task.isCancelled, self.generation == generation else { return }
-                        let data: Data
-                        switch message {
-                        case .data(let value): data = value
-                        case .string(let value): data = Data(value.utf8)
-                        @unknown default: continue
-                        }
-                        self.lastFrameAt = Date()
-                        let frame = try JSONDecoder().decode(StreamFrame.self, from: data)
                         for quote in frame.quotes { self.acceptQuote(quote) }
-                        self.loading = false
-                        delay = 1
+                        let received = Set(frame.quotes.map(\.id))
+                        for id in stockIDs where !received.contains(id) {
+                            self.errors[id] = tr("股票报价暂不可用，保留上次报价与时间。", "Stock quote unavailable; previous price and time are preserved.")
+                        }
+                        self.connection = tr("股票 HTTP 行情 · 15 秒查询", "Stock HTTP snapshots · 15s polling")
+                        self.loading = false; delay = 1
+                        try await Task.sleep(for: .seconds(15))
                     }
+
                 } catch {
                     guard !Task.isCancelled, self.generation == generation else { return }
                     self.connection = error.localizedDescription
                     for id in self.selected { self.errors[id] = tr("连接中断，等待重连；旧报价不会刷新时间。", "Disconnected; retrying. Old quote timestamps are preserved.") }
                 }
+                self.mixedPublicTask?.cancel(); self.mixedPublicTask = nil
                 self.heartbeat?.cancel(); self.heartbeat = nil
                 self.socket?.cancel(with: .goingAway, reason: nil); self.socket = nil
                 self.loading = false
@@ -207,6 +197,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         generation = UUID()
         streamTask?.cancel(); streamTask = nil
         discoveryTask?.cancel(); discoveryTask = nil; catalogLoading = false
+        mixedPublicTask?.cancel(); mixedPublicTask = nil
         heartbeat?.cancel(); heartbeat = nil
         presenceTask?.cancel(); presenceTask = nil
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
@@ -225,14 +216,18 @@ func tr(_ chinese: String, _ english: String) -> String {
             if !self.api.isConfigured { await self.reloadPublicCatalog(); return }
             do {
                 let (items, enabled) = try await self.api.catalog()
-                self.catalog = items; self.stocksEnabled = enabled; self.catalogNotice = nil
-                if let data = try? JSONEncoder().encode(items) { UserDefaults.standard.set(data, forKey: "serverCatalogV1") }
+                self.stocksEnabled = enabled
+                let retained = self.catalog.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") }
+                self.catalog = items + retained.filter { item in !items.contains(where: { $0.id == item.id }) }
+                self.catalogNotice = nil
+                if let data = try? JSONEncoder().encode(self.catalog) { UserDefaults.standard.set(data, forKey: "serverCatalogV1") }
+                await self.reloadPublicCatalog()
             } catch { await self.reloadPublicCatalog() }
         }
     }
     private func reloadPublicCatalog() async {
         // Discover independent sources separately; a blocked Binance endpoint must not hide Hyperliquid.
-        var items = catalog.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") }
+        var items = catalog.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") || (stocksEnabled && $0.id.hasPrefix("stock:")) }
         var failed = 0
         func persist() {
             catalog = items.sorted { $0.id < $1.id }

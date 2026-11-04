@@ -142,6 +142,11 @@ enum ServiceError: LocalizedError {
         }
         return (result, stocks)
     }
+    func stockQuotes(symbols: [String]) async throws -> StreamFrame {
+        struct Selection: Encodable { let symbols: [String] }
+        return try JSONDecoder().decode(StreamFrame.self, from: await request("v1/quotes", method: "POST",
+            body: JSONEncoder().encode(Selection(symbols: symbols))))
+    }
     func socket(symbols: [String]) async throws -> URLSessionWebSocketTask {
         var components = URLComponents(url: try base.appendingPathComponent("v1/stream"), resolvingAgainstBaseURL: false)!
         components.scheme = "wss"

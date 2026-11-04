@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from .apns import APNs, push_due
 from .config import Settings
 from .database import Store
-from .models import SessionInput, now, Instrument, Quote
+from .models import SessionInput, StockQuoteRequest, now, Instrument, Quote
 from .providers import MarketHub
 
 log = logging.getLogger("nosce")
@@ -29,6 +29,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     from .commerce_routes import mount_commerce
     identity = injected_identity or AppleIdentity(settings,store)
     billing = injected_billing or Billing(settings,store)
+    from .stock_service import StockService
+    stocks = StockService(settings,store,hub)
 
     def load_snapshot():
         if not settings.serverless:return
@@ -80,7 +82,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.6.8", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.7.2", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
 
@@ -166,10 +168,22 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     async def catalog(authorization: str | None = Header(default=None),
                       offset: int = Query(default=0, ge=0), limit: int = Query(default=5000, ge=1, le=5000)):
         authenticate(authorization)
-        items = sorted(hub.catalog.values(), key=lambda x: (x.id != "hl:BTC", x.id))
+        stock_items=await stocks.catalog()
+        available={key:value for key,value in hub.catalog.items() if not key.startswith("stock:") or stocks.allowed(value)}
+        available.update(stock_items)
+        items = sorted(available.values(), key=lambda x: (x.id != "hl:BTC", x.id))
         return {"instruments": [x.public() for x in items[offset:offset+limit]],
                 "nextOffset": offset+limit if offset+limit < len(items) else None,
                 "stocksEnabled": settings.stocks_enabled}
+
+    @app.post("/v1/quotes")
+    async def stock_snapshots(value: StockQuoteRequest, authorization: str | None = Header(default=None)):
+        authenticate(authorization)
+        if not stocks.exchanges():raise HTTPException(503,"Stock data is not enabled")
+        try:quotes=await stocks.quotes(value.symbols)
+        except ValueError:raise HTTPException(422,"Unsupported or unlicensed stock symbol")
+        return {"quotes":[quote.wire() for quote in quotes],"serverTime":int(now()),"refreshAfterSeconds":15,
+                "unavailable":[key for key in value.symbols if key not in {quote.id for quote in quotes}]}
 
     @app.post("/v1/sessions")
     async def session(value: SessionInput, authorization: str | None = Header(default=None)):

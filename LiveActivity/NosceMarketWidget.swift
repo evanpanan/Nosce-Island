@@ -59,7 +59,7 @@ struct MarketWidgetView: View {
     private var content: some View {
         VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 6) {
             HStack(spacing: 5) {
-                Image(systemName: "waveform.path").foregroundStyle(.mint)
+                Image(systemName: "waveform.path").foregroundStyle(MarketPalette.accent)
                 Text("NOSCE ISLAND").font(.system(size: 10, weight: .semibold))
                 Spacer(minLength: 0)
                 if family != .systemSmall { Text(widgetText("行情快照", "SNAPSHOT")).font(.system(size: 9)).foregroundStyle(.secondary) }
@@ -120,11 +120,7 @@ struct MarketWidgetView: View {
         }.font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.7)
     }
     private func changeColor(_ quote: IslandQuote) -> Color {
-        switch quote.priceTone(redUp: entry.snapshot.redUp) {
-        case .green: return .green
-        case .red: return .red
-        case .neutral: return .secondary
-        }
+        MarketPalette.price(quote.priceTone(redUp: entry.snapshot.redUp))
     }
 }
 private struct MarketWidgetBackground: ViewModifier {

@@ -20,7 +20,7 @@ struct ContentView: View {
         .onOpenURL { url in
             if url.scheme == "nosceisland", url.host == "watch" { tab = 0 }
         }
-        .tint(.mint)
+        .tint(MarketPalette.accent)
         .task { store.startRefreshing(); await commerce.start() }
         .alert(tr("提示", "Notice"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
             Button(tr("知道了", "OK")) { store.message = nil }
@@ -33,7 +33,7 @@ struct ContentView: View {
                     HStack(spacing: 8) { Image("WaveMark").resizable().scaledToFit().frame(width: 28, height: 28); Text("NOSCE ISLAND").font(.caption.bold()).tracking(2) }
                     Spacer()
                     Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.1").font(.caption2.monospaced()).foregroundStyle(.secondary)
-                }.foregroundStyle(.mint)
+                }.foregroundStyle(MarketPalette.accent)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("行情，抬眼即见。", "Markets. At a glance.")).font(.largeTitle.bold())
                     Text(tr("无强制广告 · 无付费倒计时", "No forced ads. No paid countdown."))
@@ -44,7 +44,7 @@ struct ContentView: View {
                         Text(tr("灵动岛预览", "ISLAND PREVIEW")).font(.caption.bold()).foregroundStyle(.secondary)
                         Spacer()
                         Text(tr("真实行情", "MARKET DATA"))
-                            .font(.caption2.bold()).foregroundStyle(.mint)
+                            .font(.caption2.bold()).foregroundStyle(MarketPalette.accent)
                     }
                     VStack(spacing:3) {
                         ForEach(store.visibleInstruments) { item in
@@ -78,14 +78,14 @@ struct ContentView: View {
                     Text(tr("币安与 Hyperliquid 显示永续合约标记价；独立股票报价仅在授权数据源启用时提供。App 内行情直接连接数据源；灵动岛后台持续更新需要上线推送服务。延迟、休市和过期状态会单独标明。", "Binance and Hyperliquid show perpetual mark prices. Exchange stock quotes require an enabled licensed feed. In-app quotes connect directly to the source. Background island updates require the push service. Delays, closed markets and stale prices are labelled."))
                         .font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
                 }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.mint.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
+                    .background(MarketPalette.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 18))
                 Button {
                     Task { if store.activityRunning { await store.endActivity() } else { await store.startActivity() } }
                 } label: {
                     Label(store.activityRunning ? tr("结束盯盘", "Stop watching") : tr("显示到灵动岛", "Show on Dynamic Island"),
                           systemImage: store.activityRunning ? "stop.circle" : "waveform.path")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 19)
-                }.buttonStyle(.borderedProminent).tint(store.activityRunning ? .gray : .mint).foregroundStyle(.black)
+                }.buttonStyle(.borderedProminent).tint(store.activityRunning ? .gray : MarketPalette.accent).foregroundStyle(.black)
                     .disabled(store.activityStarting)
                 Text(store.lastActivityResult).font(.caption).foregroundStyle(.secondary)
                 if store.activityRunning {
@@ -112,7 +112,7 @@ struct ContentView: View {
                 }
             }
             if let points = store.history[item.id], points.count > 1 {
-                Sparkline(values: points).stroke(.mint, style: StrokeStyle(lineWidth: 2, lineCap: .round)).frame(height: 44)
+                Sparkline(values: points).stroke(quote?.change == nil ? MarketPalette.accent : store.color(quote?.change), style: StrokeStyle(lineWidth: 2, lineCap: .round)).frame(height: 44)
                 Text(tr("本次打开期间采样", "Samples since opening")).font(.caption2).foregroundStyle(.secondary)
             }
             if !item.settlementCurrency.isEmpty && item.settlementCurrency != item.currency {
@@ -125,7 +125,7 @@ struct ContentView: View {
             if let quote {
                 TimelineView(.periodic(from: .now, by: 5)) { context in
                     HStack {
-                        Circle().fill(quote.isStale(at: context.date) ? .orange : .mint).frame(width: 5, height: 5)
+                        Circle().fill(quote.isStale(at: context.date) ? .orange : MarketPalette.accent).frame(width: 5, height: 5)
                         Text(quote.source + " · " + quote.statusLabel + " · " + quote.updatedAt.formatted(date: .omitted, time: .standard))
                             .font(.caption2).foregroundStyle(.secondary)
                         if quote.isStale(at: context.date) { Text(tr("过期", "STALE")).font(.caption2.bold()).foregroundStyle(.orange) }
@@ -150,6 +150,10 @@ struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if store.catalogLoading { ProgressView(tr("正在加载市场…", "Loading markets…")) }
                 if let notice = store.catalogNotice { Text(notice).font(.caption).foregroundStyle(.orange) }
+                if ["US", "HK"].contains(market), !store.catalog.contains(where: { $0.market == market }) {
+                    Text(tr("该市场的股票数据尚未开放；合约报价不作为股票报价展示。", "Stock data for this market is not available yet. Contract prices are not exchange stock quotes."))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
                 Button(tr("刷新市场列表", "Reload markets")) { store.reloadCatalog() }.disabled(store.catalogLoading)
             }
             Section(tr("已选择 · 点按移除", "Selected · tap to remove")) {
@@ -161,7 +165,7 @@ struct ContentView: View {
             }
             Section(tr("最多关注 8 个资产 · 灵动岛逐个轮播", "Follow up to 8 · island rotates one at a time")) {
                 ForEach(store.catalog.filter {
-                    (market == "All" || $0.market == market || ($0.market == "Contracts" && $0.region == market)) &&
+                    (market == "All" || $0.market == market) &&
                     (search.isEmpty || ($0.id + " " + $0.name).localizedCaseInsensitiveContains(search))
                 }) { item in
                     Button { store.toggle(item) } label: {

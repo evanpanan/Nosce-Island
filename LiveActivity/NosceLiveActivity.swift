@@ -13,7 +13,7 @@ struct NosceLiveActivity: Widget {
         ActivityConfiguration(for: MarketActivityAttributes.self) { context in
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    Label { Text("NOSCE ISLAND") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption2.bold()).foregroundStyle(.mint)
+                    Label { Text("NOSCE ISLAND") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption2.bold()).foregroundStyle(MarketPalette.accent)
                     Spacer()
                     status(context)
                 }
@@ -27,7 +27,7 @@ struct NosceLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label { Text("NOSCE") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption.bold()).foregroundStyle(.mint)
+                    Label { Text("NOSCE") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption.bold()).foregroundStyle(MarketPalette.accent)
                 }
                 DynamicIslandExpandedRegion(.trailing) { status(context) }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -67,15 +67,11 @@ struct NosceLiveActivity: Widget {
                 }
             }
             .widgetURL(URL(string: "nosceisland://watch"))
-            .keylineTint(.mint)
+            .keylineTint(MarketPalette.accent)
         }
     }
     private func priceColor(_ quote: IslandQuote, redUp: Bool) -> Color {
-        switch quote.priceTone(redUp: redUp) {
-        case .green: return .green
-        case .red: return .red
-        case .neutral: return .secondary
-        }
+        MarketPalette.price(quote.priceTone(redUp: redUp))
     }
     private func local(_ zh: String, _ en: String) -> String {
         Locale.preferredLanguages.first?.hasPrefix("zh") == true ? zh : en

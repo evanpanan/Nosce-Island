@@ -76,3 +76,15 @@ def finite(value):
     if not math.isfinite(result):
         raise ValueError("Non-finite upstream number")
     return result
+
+
+class StockQuoteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    symbols: list[str] = Field(min_length=1, max_length=8)
+
+    @field_validator("symbols")
+    @classmethod
+    def valid_symbols(cls, values):
+        if len(set(values)) != len(values) or any(not key.startswith("stock:") or len(key)>128 for key in values):
+            raise ValueError("Select one to eight unique stock symbols")
+        return values

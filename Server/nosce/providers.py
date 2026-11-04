@@ -111,6 +111,8 @@ class MarketHub:
         async with self.td_lock:
             await asyncio.sleep(max(0, self.td_next_at - time.monotonic()))
             self.td_next_at = time.monotonic() + 60 / self.settings.stock_requests_per_minute
+            if not self.store.limit("twelve-data:upstream",self.settings.stock_requests_per_minute):
+                raise ValueError("Stock provider request budget reached")
             response = await self.client.get("https://api.twelvedata.com/" + endpoint, params=params,
                                              headers={"Authorization": "apikey " + self.settings.td_key})
             data = None
