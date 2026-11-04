@@ -48,18 +48,23 @@ class AlpacaFeed:
         if response.status_code!=200:raise ValueError('Alpaca request rejected')
         return response.json()
 
+    @staticmethod
+    def parse_assets(assets):
+        items=[]
+        for asset in assets:
+            symbol=asset.get('symbol','');exchange=asset.get('exchange','')
+            if asset.get('status')!='active' or asset.get('class')!='us_equity' or exchange not in EXCHANGES:continue
+            if not symbol or len(symbol)>64 or any(x in symbol for x in ',:/'):continue
+            items.append(Instrument(id='stock:'+exchange+':'+symbol,symbol=symbol,name=asset.get('name') or symbol,
+                market='US',currency='USD',exchange=exchange,provider='alpaca',provider_symbol=symbol,region='US'))
+        return list({item.id:item for item in items}.values())
+
     async def catalog(self):
         saved,stamp=self.store.get_cache('alpaca:catalog')
         if saved and stamp>now()-86400:return {item.id:item for item in map(Instrument.model_validate,saved)}
         try:
             assets=await self.get('/v2/assets',{'status':'active','asset_class':'us_equity'})
-            items=[]
-            for asset in assets:
-                symbol=asset.get('symbol','');exchange=asset.get('exchange','')
-                if asset.get('status')!='active' or asset.get('class')!='us_equity' or exchange not in EXCHANGES:continue
-                if not symbol or len(symbol)>64 or any(x in symbol for x in ',:/'):continue
-                items.append(Instrument(id='stock:'+exchange+':'+symbol,symbol=symbol,name=asset.get('name') or symbol,
-                    market='US',currency='USD',exchange=exchange,provider='alpaca',provider_symbol=symbol,region='US'))
+            items=self.parse_assets(assets)
             if items:self.store.put_cache('alpaca:catalog',[item.model_dump() for item in items])
             return {item.id:item for item in items}
         except Exception:

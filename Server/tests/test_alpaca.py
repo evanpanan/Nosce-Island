@@ -82,3 +82,25 @@ def test_bad_future_prices_and_same_day_reference_are_handled(tmp_path):
     assert snapshot_quote(item,payload,False).market_state=='closed'
     payload['latestTrade']['t']=(datetime.now(timezone.utc)+timedelta(days=1)).isoformat()
     with pytest.raises(ValueError):snapshot_quote(item,payload,True)
+
+
+def test_large_verified_catalog_is_paginated_without_hiding_us_symbols(tmp_path):
+    from nosce.alpaca import AlpacaFeed
+    settings=cfg(tmp_path);store=Store(':memory:',settings.token_key)
+    install,token=store.register()
+    settings=replace(settings,alpaca_key='fixture-key',alpaca_secret='fixture-secret',alpaca_personal_user=store.user(install)['id'])
+    assets=[{'symbol':f'TEST{i:05}','name':'Fixture equity','class':'us_equity','status':'active','exchange':'NASDAQ'} for i in range(13214)]
+    items=AlpacaFeed.parse_assets(assets)
+    store.put_cache('alpaca:catalog',[item.model_dump() for item in items])
+    hub=MarketHub(settings,store)
+    def reject_network(request):raise AssertionError('Verified catalog must not require another provider call')
+    hub.client=httpx.AsyncClient(transport=httpx.MockTransport(reject_network))
+    with TestClient(create_app(settings,injected_store=store,injected_hub=hub,run_workers=False),base_url='https://test') as client:
+        offset=0;received=[];pages=[]
+        while offset is not None:
+            r=client.get('/v1/catalog',params={'offset':offset},headers={'Authorization':'Bearer '+token})
+            assert r.status_code==200 and r.json()['stockStatus']=='ready'
+            data=r.json();pages.append(len(data['instruments']));received+=data['instruments'];offset=data['nextOffset']
+        assert pages==[5000,5000,3214]
+        assert len({item['id'] for item in received})==13214
+        assert received[-1]['symbol']=='TEST13213' and all(item['market']=='US' for item in received)

@@ -57,10 +57,14 @@ def test_saved_config_is_encrypted_private_revisioned_and_effective_without_rede
         assert result.status_code==200 and result.json()['assetCount']==1 and not result.json()['quoteAvailable']
         # No sample price is claimed when credentials are valid but the symbol has no latest trade.
         assert 'operator-secret' not in result.text
+        cached,_=store.get_cache('alpaca:catalog')
+        assert len(cached)==1 and cached[0]['symbol']=='AAPL'
+        provider_calls=len(requests)
         other_catalog=c.get('/v1/catalog',headers={'Authorization':'Bearer '+other}).json()
         assert other_catalog['instruments']==[] and other_catalog['stockStatus']=='restricted'
         own=c.get('/v1/catalog',headers={'Authorization':'Bearer '+token}).json()
         assert own['stockStatus']=='ready' and own['instruments'][0]['provider']=='alpaca'
+        assert len(requests)==provider_calls # Connection test publishes the actual verified catalog for the app.
         # A new instance independently loads the encrypted database setting, without shared process state.
         second=create_app(settings,injected_store=store,injected_hub=hub,run_workers=False)
         with TestClient(second,base_url='https://test') as c2:

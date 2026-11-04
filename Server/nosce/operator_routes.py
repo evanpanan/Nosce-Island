@@ -4,7 +4,6 @@ from pydantic import BaseModel,ConfigDict,Field
 from .operator_settings import ConfigConflict
 from .alpaca import AlpacaFeed
 from .models import now
-from .stock_service import StockService
 
 class ConfigPatch(BaseModel):
     model_config=ConfigDict(extra='forbid')
@@ -37,12 +36,13 @@ def mount_operator_routes(app,settings,store,hub,runtime,session):
                 # An explicit connection test bypasses metadata caches and verifies current credentials.
                 assets=await feed.get('/v2/assets',{'status':'active','asset_class':'us_equity'})
                 if not isinstance(assets,list):raise ValueError('Unexpected asset list')
-                supported=[a for a in assets if a.get('class')=='us_equity' and a.get('status')=='active' and a.get('exchange') in {x[0] for x in StockService(settings,store,hub).exchanges()}]
+                supported=feed.parse_assets(assets)
                 if not supported:raise ValueError('No supported assets')
-                symbol=next((a['symbol'] for a in supported if a['symbol']=='AAPL'),supported[0]['symbol'])
+                symbol=next((a.symbol for a in supported if a.symbol=='AAPL'),supported[0].symbol)
                 snapshots=await feed.get('/v2/stocks/snapshots',{'symbols':symbol,'feed':'iex'})
-                # Explicitly invalidate prior credential catalog/quote caches; never relabel old prices.
+                # Refresh the verified catalog for the app immediately, not only a success message.
                 store.db.execute("DELETE FROM runtime_cache WHERE key LIKE ?",('alpaca:%',))
+                store.put_cache('alpaca:catalog',[item.model_dump() for item in supported])
                 return {'ok':True,'assetCount':len(supported),'quoteAvailable':bool(snapshots.get(symbol,{}).get('latestTrade')),
                         'checkedAt':now(),'message':'连接成功，请在指定测试设备的 App 自选页刷新市场列表。IEX 暂无成交的品种可能没有价格。'}
             result=await asyncio.wait_for(run(),timeout=18)
