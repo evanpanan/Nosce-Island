@@ -50,7 +50,7 @@ def mount_admin(app, settings, store, hub, billing):
     def session_hash(token):
         return store.digest(token+"\0"+settings.admin_password_hash+"\0"+settings.admin_totp_secret)
 
-    def session(request, csrf=False):
+    def session(request, csrf=False, limited=True):
         if not settings.admin_password_hash:
             raise HTTPException(503,"Administrator access is not configured")
         token = request.cookies.get("nosce_admin","")
@@ -59,16 +59,16 @@ def mount_admin(app, settings, store, hub, billing):
             raise HTTPException(401,"Administrator sign-in required")
         if csrf and not secrets.compare_digest(request.headers.get("X-CSRF-Token",""),row["csrf"]):
             raise HTTPException(403,"Invalid CSRF token")
-        if not store.limit("admin:"+row["token_hash"],120):
+        if limited and not store.admin_limit("admin:"+row["token_hash"],120):
             raise HTTPException(429,"Administrator rate limit exceeded")
         return row
 
     @app.get("/admin/api/config")
-    async def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.6"}
+    def login_config():
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.7"}
 
     @app.get("/admin",response_class=HTMLResponse)
-    async def page():
+    def page():
         nonce = secrets.token_urlsafe(24)
         html = Path(__file__).with_name("admin.html").read_text().replace("<script>",'<script nonce="'+nonce+'">')
         response = HTMLResponse(html)
@@ -77,7 +77,7 @@ def mount_admin(app, settings, store, hub, billing):
         return response
 
     @app.post("/admin/api/login")
-    async def login(value: AdminLogin, request: Request):
+    def login(value: AdminLogin, request: Request):
         if not settings.admin_password_hash:
             raise HTTPException(503,"请先在 Vercel 环境变量中设置管理员密码")
         ip = request.client.host if request.client else "unknown"
@@ -104,44 +104,55 @@ def mount_admin(app, settings, store, hub, billing):
         return response
 
     @app.get("/admin/api/session")
-    async def current(request: Request):
+    def current(request: Request):
         return {"csrf":session(request)["csrf"]}
 
     @app.post("/admin/api/logout")
-    async def logout(request: Request):
-        row = session(request,True)
+    def logout(request: Request):
+        row = session(request,True,limited=False)
         store.db.execute("DELETE FROM admin_sessions WHERE token_hash=?",(row["token_hash"],))
         from fastapi.responses import JSONResponse
         response = JSONResponse({"ok":True});response.delete_cookie("nosce_admin",path="/admin")
         return response
 
     @app.get("/admin/api/overview")
-    async def overview(request: Request):
+    def overview(request: Request):
         session(request)
         db = store.db
-        online = db.execute("""SELECT count(DISTINCT installs.user_id) AS users,count(*) AS devices
-          FROM runtime_cache JOIN installs ON runtime_cache.key=('presence:' || installs.id)
-          JOIN users ON users.id=installs.user_id
-          WHERE runtime_cache.updated>? AND users.deleted=0""",(now()-90,)).fetchone()
-        return {"users":db.execute("SELECT count(*) FROM users WHERE deleted=0").fetchone()[0],
-            "onlineUsers":online["users"],"onlineDevices":online["devices"],"onlineWindowSeconds":90,
-            "signedIn":db.execute("SELECT count(*) FROM users WHERE apple_hash IS NOT NULL AND deleted=0").fetchone()[0],
-            "paying":db.execute("""SELECT count(DISTINCT user_id) FROM orders JOIN users ON users.id=orders.user_id
-              LEFT JOIN renewals ON orders.original_id=renewals.original_id WHERE revoked IS NULL AND upgraded=0
-              AND (CASE WHEN renewals.grace>orders.expires THEN renewals.grace ELSE orders.expires END)>? AND users.deleted=0
-              AND orders.transaction_id=(SELECT x.transaction_id FROM orders x WHERE x.original_id=orders.original_id
-                ORDER BY x.purchased DESC,x.signed_at DESC LIMIT 1)""",(now(),)).fetchone()[0],
-            "sessions":len(store.sessions()),"orders":db.execute("SELECT count(*) FROM orders").fetchone()[0],
-            "refunded":db.execute("SELECT count(*) FROM orders WHERE revoked IS NOT NULL").fetchone()[0],
+        timestamp=now()
+        counts=db.execute("""SELECT
+          (SELECT count(*) FROM users WHERE deleted=0) AS users,
+          (SELECT count(DISTINCT installs.user_id) FROM runtime_cache JOIN installs ON runtime_cache.key=('presence:' || installs.id)
+            JOIN users ON users.id=installs.user_id WHERE runtime_cache.updated>? AND users.deleted=0) AS onlineUsers,
+          (SELECT count(*) FROM runtime_cache JOIN installs ON runtime_cache.key=('presence:' || installs.id)
+            JOIN users ON users.id=installs.user_id WHERE runtime_cache.updated>? AND users.deleted=0) AS onlineDevices,
+          (SELECT count(*) FROM users WHERE apple_hash IS NOT NULL AND deleted=0) AS signedIn,
+          (SELECT count(DISTINCT user_id) FROM orders JOIN users ON users.id=orders.user_id
+            LEFT JOIN renewals ON orders.original_id=renewals.original_id WHERE revoked IS NULL AND upgraded=0
+            AND (CASE WHEN renewals.grace>orders.expires THEN renewals.grace ELSE orders.expires END)>? AND users.deleted=0
+            AND orders.transaction_id=(SELECT x.transaction_id FROM orders x WHERE x.original_id=orders.original_id
+              ORDER BY x.purchased DESC,x.signed_at DESC LIMIT 1)) AS paying,
+          (SELECT count(*) FROM sessions WHERE expires>?) AS sessions,
+          (SELECT count(*) FROM orders) AS orders,
+          (SELECT count(*) FROM orders WHERE revoked IS NOT NULL) AS refunded""",
+          (timestamp-90,timestamp-90,timestamp,timestamp)).fetchone()
+        cached={row["key"]:row for row in db.execute("SELECT key,payload,updated FROM runtime_cache WHERE key IN ('catalog','heartbeat')")}
+        heartbeat=cached.get('heartbeat')
+        health=json.loads(heartbeat['payload']) if heartbeat else {}
+        catalog=cached.get('catalog')
+        return {**dict(counts),"onlineWindowSeconds":90,
             "grossByCurrency":[dict(row) for row in db.execute("SELECT currency,sum(price_milli)/1000.0 AS amount FROM orders WHERE revoked IS NULL AND price_milli IS NOT NULL GROUP BY currency")],
             "environment":settings.app_store_environment,"salesEnabled":settings.sales_enabled,
-            "binance":settings.binance_enabled,"binanceEvents":hub.binance_stream_events,
-            "hyperliquidEvents":hub.hl_stream_events,"instruments":len(hub.catalog),"apnsConfigured":settings.apns_configured,
-            "verifierConfigured":billing.verifier.enabled,"runtime":"vercel" if settings.serverless else "server",
-            "workerOnline":bool(store.get_cache("heartbeat")[1]>now()-45),"database":"PostgreSQL" if store.is_postgres else "SQLite"}
+            "binance":settings.binance_enabled,
+            "binanceEvents":health.get('binanceEvents',0) if settings.serverless else hub.binance_stream_events,
+            "hyperliquidEvents":health.get('hlEvents',0) if settings.serverless else hub.hl_stream_events,
+            "instruments":len(json.loads(catalog['payload'])) if settings.serverless and catalog else (0 if settings.serverless else len(hub.catalog)),
+            "apnsConfigured":settings.apns_configured,"verifierConfigured":billing.verifier.enabled,
+            "runtime":"vercel" if settings.serverless else "server",
+            "workerOnline":bool(heartbeat and heartbeat['updated']>timestamp-45),"database":"PostgreSQL" if store.is_postgres else "SQLite"}
 
     @app.get("/admin/api/activities")
-    async def activities(request: Request, search: str = "", offset: int = 0):
+    def activities(request: Request, search: str = "", offset: int = 0):
         session(request)
         if offset < 0 or len(search) > 100:
             raise HTTPException(422,"Invalid search")
@@ -159,7 +170,7 @@ def mount_admin(app, settings, store, hub, billing):
         return {"items":items,"nextOffset":offset+50 if len(rows)==50 else None}
 
     @app.get("/admin/api/users")
-    async def users(request: Request, search: str = "", offset: int = 0):
+    def users(request: Request, search: str = "", offset: int = 0):
         session(request)
         if offset < 0 or len(search) > 100:
             raise HTTPException(422,"Invalid search")
@@ -168,19 +179,24 @@ def mount_admin(app, settings, store, hub, billing):
           (users.app_store_hash IS NOT NULL) AS storeLinked,
           (SELECT max(last_seen) FROM installs WHERE user_id=users.id) AS lastSeen,
           (SELECT count(*) FROM orders WHERE user_id=users.id) AS orderCount,
-          (SELECT max(expires) FROM orders WHERE user_id=users.id AND revoked IS NULL AND upgraded=0) AS expiresAt
-          FROM users WHERE users.id LIKE ? ORDER BY users.created DESC LIMIT 50 OFFSET ?""",("%"+search+"%",offset)).fetchall()
+          (SELECT max(CASE WHEN renewals.grace>orders.expires THEN renewals.grace ELSE orders.expires END)
+            FROM orders LEFT JOIN renewals ON orders.original_id=renewals.original_id
+            WHERE orders.user_id=users.id AND revoked IS NULL AND upgraded=0 AND orders.transaction_id=(
+              SELECT x.transaction_id FROM orders x WHERE x.original_id=orders.original_id
+              ORDER BY x.purchased DESC,x.signed_at DESC LIMIT 1)) AS expiresAt,
+          (SELECT renewals.auto_renew FROM renewals JOIN orders ON orders.original_id=renewals.original_id
+            WHERE orders.user_id=users.id ORDER BY renewals.signed_at DESC LIMIT 1) AS autoRenew,
+          (SELECT renewals.billing_retry FROM renewals JOIN orders ON orders.original_id=renewals.original_id
+            WHERE orders.user_id=users.id ORDER BY renewals.signed_at DESC LIMIT 1) AS billingRetry
+          FROM users WHERE users.id LIKE ? ORDER BY users.created DESC,users.id LIMIT 50 OFFSET ?""",("%"+search+"%",offset)).fetchall()
         items=[]
         for row in rows:
-            value=dict(row);value["expiresAt"]=billing.entitlement(row["id"])
-            renewal=billing.renewal_status(row["id"])
-            value["autoRenew"]=renewal["auto_renew"] if renewal else None
-            value["billingRetry"]=bool(renewal["billing_retry"]) if renewal else False
+            value=dict(row);value["billingRetry"]=bool(value["billingRetry"])
             items.append(value)
         return {"items":items,"nextOffset":offset+50 if len(rows)==50 else None}
 
     @app.get("/admin/api/orders")
-    async def orders(request: Request, search: str = "", offset: int = 0):
+    def orders(request: Request, search: str = "", offset: int = 0):
         session(request)
         if offset < 0 or len(search)>100:
             raise HTTPException(422,"Invalid search")

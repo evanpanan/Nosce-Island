@@ -45,6 +45,14 @@ SCHEMA = """
 """
 
 
+PERFORMANCE_INDEXES=(
+    "CREATE INDEX IF NOT EXISTS installs_owner_seen ON installs(user_id,last_seen)",
+    "CREATE INDEX IF NOT EXISTS users_created ON users(created DESC,id)",
+    "CREATE INDEX IF NOT EXISTS orders_latest ON orders(original_id,purchased DESC,signed_at DESC)",
+    "CREATE INDEX IF NOT EXISTS orders_purchased ON orders(purchased DESC)",
+    "CREATE INDEX IF NOT EXISTS sessions_expires ON sessions(expires)",
+)
+
 def serialized(method):
     @wraps(method)
     def run(self,*args,**kwargs):
@@ -63,7 +71,7 @@ class Store:
             self.lock_file = None
             self.cipher = AESGCM(bytes.fromhex(key))
             self.db = PostgresDB(path)
-            self.db.initialize(SCHEMA)
+            self.db.initialize(SCHEMA,PERFORMANCE_INDEXES)
             return
         if path != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -95,6 +103,17 @@ class Store:
             user = str(uuid.uuid4())
             self.db.execute("INSERT INTO users(id,created) VALUES(?,?)", (user, row["created"]))
             self.db.execute("UPDATE installs SET user_id=? WHERE id=?", (user,row["id"]))
+
+        for statement in PERFORMANCE_INDEXES:
+            self.db.execute(statement)
+
+    def admin_limit(self,key,maximum,window=60):
+        bucket=int(now()//window)
+        row=self.db.execute("""INSERT INTO limits(key,bucket,count,updated) VALUES(?,?,1,?)
+          ON CONFLICT(key) DO UPDATE SET bucket=excluded.bucket,
+          count=CASE WHEN limits.bucket=excluded.bucket THEN limits.count+1 ELSE 1 END,
+          updated=excluded.updated RETURNING count""",(key,bucket,now())).fetchone()
+        return row[0]<=maximum
 
     @staticmethod
     def digest(value):

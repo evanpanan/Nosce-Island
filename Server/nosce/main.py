@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import secrets
+import time
 import sqlite3
 from contextlib import asynccontextmanager, nullcontext
 from fastapi import FastAPI, Header, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -79,12 +80,21 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.6.6", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.6.7", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
 
+    @asynccontextmanager
+    async def request_database(path,metrics):
+        # Public HTML, configuration and liveness require no database round trip.
+        public=path in {'/','/admin','/healthz','/admin/api/config'}
+        if hasattr(store.db,'request_session') and not public:
+            async with store.db.request_session(metrics):yield
+        else:yield
+
     @app.middleware("http")
     async def guards(request: Request, call_next):
+        started=time.perf_counter();metrics={}
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
                 if int(request.headers.get("content-length", "0")) > (65536 if request.url.path.startswith(("/v1/app-store/", "/v1/purchases")) else 8192):
@@ -92,10 +102,12 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             except ValueError:
                 return JSONResponse({"detail": "Invalid content length"}, status_code=400)
             # Reverse proxy also enforces a body limit for chunked transfers.
-        with store.db.session() if hasattr(store.db,"session") else nullcontext():
-            if settings.serverless and request.url.path.startswith(("/admin/api/overview","/readyz","/v1/catalog","/v1/sessions")):
+        async with request_database(request.url.path,metrics):
+            if settings.serverless and request.url.path.startswith(("/readyz","/v1/catalog","/v1/sessions")):
                 load_snapshot()
             result = await call_next(request)
+        result.headers['Server-Timing']='app;dur=%.1f, db_connect;dur=%.1f, db;dur=%.1f, queries;desc="%s"'%(
+            (time.perf_counter()-started)*1000,metrics.get('connect_ms',0),metrics.get('query_ms',0),metrics.get('queries',0))
         result.headers["Cache-Control"] = "no-store"
         result.headers["X-Content-Type-Options"] = "nosniff"
         return result
