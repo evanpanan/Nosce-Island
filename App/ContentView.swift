@@ -2,6 +2,7 @@ import SwiftUI
 import StoreKit
 
 struct ContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject var store: MarketStore
     @EnvironmentObject var commerce: CommerceStore
     @State private var tab = 0
@@ -99,7 +100,7 @@ struct ContentView: View {
                     Label(store.activityRunning ? tr("结束盯盘", "Stop watching") : tr("显示到灵动岛", "Show on Dynamic Island"),
                           systemImage: store.activityRunning ? "stop.circle" : "waveform.path")
                         .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 19)
-                }.buttonStyle(.borderedProminent).tint(store.activityRunning ? .gray : MarketPalette.accent).foregroundStyle(.black)
+                }.buttonStyle(.borderedProminent).tint(store.activityRunning ? .gray : MarketPalette.accent).foregroundStyle(colorScheme == .light ? .white : .black)
                     .disabled(store.activityStarting)
                 Text(store.lastActivityResult).font(.caption).foregroundStyle(.secondary)
                 if store.activityRunning {

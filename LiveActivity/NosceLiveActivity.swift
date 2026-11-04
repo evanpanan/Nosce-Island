@@ -28,7 +28,7 @@ struct NosceLiveActivity: Widget {
         } dynamicIsland: { context in
             DynamicIsland {
                 DynamicIslandExpandedRegion(.leading) {
-                    Label { Text("NOSCE") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption.bold()).foregroundStyle(MarketPalette.accent)
+                    Label { Text("NOSCE") } icon: { Image(systemName:"waveform.path").frame(width:16,height:16) }.font(.caption.bold()).foregroundStyle(MarketPalette.accent).environment(\.colorScheme, .dark)
                 }
                 DynamicIslandExpandedRegion(.trailing) { status(context) }
                 DynamicIslandExpandedRegion(.bottom) {
@@ -56,6 +56,7 @@ struct NosceLiveActivity: Widget {
                         .lineLimit(1).minimumScaleFactor(0.8)
                         .foregroundStyle(priceColor(quote, redUp: context.state.redUp))
                         .frame(width: 68, alignment: .trailing)
+                        .environment(\.colorScheme, .dark)
                         .accessibilityLabel(quote.symbol + " " + quote.formattedPrice)
                 }
             } minimal: {
@@ -70,7 +71,7 @@ struct NosceLiveActivity: Widget {
         }
     }
     private func priceColor(_ quote: IslandQuote, redUp: Bool) -> Color {
-        MarketPalette.price(quote.priceTone(redUp: redUp))
+        MarketPalette.price(quote.priceTone(redUp: redUp), darkSurface: true)
     }
     private func local(_ zh: String, _ en: String) -> String {
         Locale.preferredLanguages.first?.hasPrefix("zh") == true ? zh : en
