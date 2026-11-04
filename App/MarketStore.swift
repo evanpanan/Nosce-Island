@@ -24,6 +24,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     @Published var message: String?
     @Published var loading = false
     @Published var catalogLoading = false
+    @Published var stockNotice: String?
     @Published var catalogNotice: String?
     @Published var connection = tr("等待连接", "Waiting")
     @Published var backgroundStatus = tr("正在检查服务", "Checking service")
@@ -217,12 +218,19 @@ func tr(_ chinese: String, _ english: String) -> String {
             do {
                 let (items, enabled) = try await self.api.catalog()
                 self.stocksEnabled = enabled
+                switch self.api.stockStatus {
+                case "restricted": self.stockNotice = tr("当前用户未获个人测试权限。请在后台服务页选择本机对应的用户编号并保存。", "This user is not enabled for personal testing. Select this device's user ID in admin services.")
+                case "not_configured": self.stockNotice = tr("美股尚未配置。请在后台服务 → 美股报价中填写 Alpaca Paper 密钥并选择测试用户。", "US stocks are not configured. Save Alpaca Paper keys and a personal test user in admin services.")
+                case "unavailable": self.stockNotice = tr("美股目录未能读取，请在后台美股配置中测试连接，并检查密钥与数据权限。", "The US stock catalog is unavailable. Test the Alpaca connection in admin services.")
+                default: self.stockNotice = nil
+                }
+
                 let retained = self.catalog.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") }
                 self.catalog = items + retained.filter { item in !items.contains(where: { $0.id == item.id }) }
                 self.catalogNotice = nil
                 if let data = try? JSONEncoder().encode(self.catalog) { UserDefaults.standard.set(data, forKey: "serverCatalogV1") }
                 await self.reloadPublicCatalog()
-            } catch { await self.reloadPublicCatalog() }
+            } catch { self.stockNotice = tr("美股服务连接失败，请确认后台已部署并测试 Alpaca 连接。", "The US stock service could not connect. Check deployment and test Alpaca in admin services."); await self.reloadPublicCatalog() }
         }
     }
     private func reloadPublicCatalog() async {

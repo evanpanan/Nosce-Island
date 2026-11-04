@@ -35,7 +35,7 @@ def test_full_user_page_has_bounded_queries_and_preserves_entitlements(tmp_path)
         users=response.json()['items'];assert len(users)==50
         assert all(value['expiresAt']==expected[value['id']] for value in users)
         grace=next(value for value in users if value['id']==owners[0]);assert grace['billingRetry'] and grace['autoRenew']==1
-        queries.clear();overview=client.get('/admin/api/overview');assert overview.status_code==200 and len(queries)==5
+        queries.clear();overview=client.get('/admin/api/overview');assert overview.status_code==200 and len(queries)==6
         assert overview.json()['users']==50 and overview.json()['paying']==49
         queries.clear();assert client.post('/admin/api/logout',headers={'X-CSRF-Token':csrf}).status_code==200
         assert len(queries)==2 and all('limits' not in query for query in queries)
@@ -93,6 +93,6 @@ def test_postgres_admin_queries_and_public_routes(postgres_settings,monkeypatch)
         response=client.get('/admin/api/users');assert response.status_code==200
         assert 'queries;desc="3"' in response.headers['server-timing']
         assert all(value['expiresAt']==expected[value['id']] for value in response.json()['items'])
-        result=client.get('/admin/api/overview');assert result.status_code==200 and 'queries;desc="5"' in result.headers['server-timing']
+        result=client.get('/admin/api/overview');assert result.status_code==200 and 'queries;desc="6"' in result.headers['server-timing']
         result=client.post('/admin/api/logout',headers={'X-CSRF-Token':csrf});assert result.status_code==200 and 'queries;desc="2"' in result.headers['server-timing']
     assert store.db.execute('SELECT version FROM schema_version WHERE version=2').fetchone()

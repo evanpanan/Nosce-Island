@@ -10,6 +10,7 @@ struct ServerStatus: Decodable {
     let environment: String
 }
 struct CatalogPage: Decodable {
+    let stockStatus: String?
     let instruments: [Instrument]
     let nextOffset: Int?
     let stocksEnabled: Bool
@@ -28,6 +29,7 @@ enum ServiceError: LocalizedError {
 }
 
 @MainActor final class NosceAPI {
+    private(set) var stockStatus: String?
     var isConfigured: Bool { (try? base) != nil }
     private var registration: Task<String, Error>?
     private var token: String?
@@ -136,6 +138,7 @@ enum ServiceError: LocalizedError {
             let page = try JSONDecoder().decode(CatalogPage.self, from: data)
             result += page.instruments
             stocks = page.stocksEnabled
+            stockStatus = page.stockStatus
             offset = page.nextOffset
             if let offset, offset <= next { throw ServiceError.unavailable(502) }
             if result.count > 100000 { throw ServiceError.unavailable(502) }

@@ -138,8 +138,23 @@ class AppStoreVerifier:
 class Billing:
     def __init__(self, settings, store, verifier=None):
         self.settings, self.store = settings, store
-        self.verifier = verifier or AppStoreVerifier(settings)
-        self.products = {value.strip() for value in settings.app_store_products.split(",") if value.strip()}
+        self._fixed_verifier = verifier
+        self._verifiers = {}
+
+    @property
+    def verifier(self):
+        if self._fixed_verifier is not None:return self._fixed_verifier
+        cfg=getattr(self.settings,'current',self.settings)
+        cached=self._verifiers.get(cfg)
+        if cached is not None:return cached
+        value=AppStoreVerifier(cfg)
+        if len(self._verifiers)>3:self._verifiers.clear()
+        self._verifiers[cfg]=value
+        return value
+
+    @property
+    def products(self):
+        return {value.strip() for value in self.settings.app_store_products.split(",") if value.strip()}
 
     async def link_store(self, install, signed):
         value = await self.verifier.app_transaction(signed)

@@ -21,6 +21,9 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     settings.validate()
     if settings.serverless: run_workers = False
     store = injected_store or Store(settings.database, settings.token_key)
+    from .operator_settings import RuntimeSettings
+    runtime=RuntimeSettings(settings,store)
+    settings=runtime
     hub = injected_hub or MarketHub(settings, store)
     sender = injected_sender or APNs(settings)
 
@@ -69,6 +72,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     async def lifespan(app):
         tasks = []
         if run_workers:
+            with runtime.bind():pass
             await hub.start()
             tasks = [asyncio.create_task(worker()),asyncio.create_task(billing_worker())]
         try:
@@ -82,9 +86,18 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.7.3", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.7.5", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
+    app.state.runtime=runtime
+
+    from fastapi.exceptions import RequestValidationError
+    from fastapi.exception_handlers import request_validation_exception_handler
+    @app.exception_handler(RequestValidationError)
+    async def private_validation_error(request,exc):
+        if request.url.path.startswith('/admin/api/services'):
+            return JSONResponse({'detail':'配置格式不正确，请检查填写内容'},status_code=422)
+        return await request_validation_exception_handler(request,exc)
 
     @asynccontextmanager
     async def request_database(path,metrics):
@@ -99,15 +112,17 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         started=time.perf_counter();metrics={}
         if request.method in {"POST", "PUT", "PATCH"}:
             try:
-                if int(request.headers.get("content-length", "0")) > (65536 if request.url.path.startswith(("/v1/app-store/", "/v1/purchases")) else 8192):
+                if int(request.headers.get("content-length", "0")) > (65536 if request.url.path.startswith(("/v1/app-store/", "/v1/purchases", "/admin/api/services/config")) else 8192):
                     return JSONResponse({"detail": "Request too large"}, status_code=413)
             except ValueError:
                 return JSONResponse({"detail": "Invalid content length"}, status_code=400)
             # Reverse proxy also enforces a body limit for chunked transfers.
         async with request_database(request.url.path,metrics):
-            if settings.serverless and request.url.path.startswith(("/readyz","/v1/catalog","/v1/sessions")):
-                load_snapshot()
-            result = await call_next(request)
+            configured=request.url.path.startswith(('/readyz','/v1/catalog','/v1/quotes','/v1/sessions','/v1/me','/v1/app-store','/v1/purchases','/admin/api/overview','/admin/api/services'))
+            with runtime.bind() if configured else nullcontext():
+                if settings.serverless and request.url.path.startswith(("/readyz","/v1/catalog","/v1/sessions")):
+                    load_snapshot()
+                result = await call_next(request)
         result.headers['Server-Timing']='app;dur=%.1f, db_connect;dur=%.1f, db;dur=%.1f, queries;desc="%s"'%(
             (time.perf_counter()-started)*1000,metrics.get('connect_ms',0),metrics.get('query_ms',0),metrics.get('queries',0))
         result.headers["Cache-Control"] = "no-store"
@@ -181,7 +196,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         items = sorted(available.values(), key=lambda x: (x.id != "hl:BTC", x.id))
         return {"instruments": [x.public() for x in items[offset:offset+limit]],
                 "nextOffset": offset+limit if offset+limit < len(items) else None,
-                "stocksEnabled": settings.stocks_enabled and allowed}
+                "stocksEnabled": settings.stocks_enabled and allowed,
+                "stockStatus": 'restricted' if not allowed else 'ready' if stock_items else 'unavailable' if settings.alpaca_enabled else 'not_configured'}
 
     @app.post("/v1/quotes")
     async def stock_snapshots(value: StockQuoteRequest, authorization: str | None = Header(default=None)):
@@ -267,7 +283,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         finally:
             hub.unwatch(install, connection)
 
-    mount_admin(app,settings,store,hub,billing)
+    mount_admin(app,settings,store,hub,billing,runtime)
     mount_commerce(app,settings,store,hub,identity,billing,authenticate)
     return app
 

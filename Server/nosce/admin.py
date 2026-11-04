@@ -46,7 +46,7 @@ class AdminLogin(BaseModel):
     code: str = Field(default="",pattern=r"^(?:[0-9]{6})?$")
 
 
-def mount_admin(app, settings, store, hub, billing):
+def mount_admin(app, settings, store, hub, billing, runtime=None):
     def session_hash(token):
         return store.digest(token+"\0"+settings.admin_password_hash+"\0"+settings.admin_totp_secret)
 
@@ -65,7 +65,7 @@ def mount_admin(app, settings, store, hub, billing):
 
     @app.get("/admin/api/config")
     def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.7.3"}
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.7.5"}
 
     @app.get("/admin",response_class=HTMLResponse)
     def page():
@@ -136,23 +136,29 @@ def mount_admin(app, settings, store, hub, billing):
           (SELECT count(*) FROM orders) AS orders,
           (SELECT count(*) FROM orders WHERE revoked IS NOT NULL) AS refunded""",
           (timestamp-90,timestamp-90,timestamp,timestamp)).fetchone()
-        cached={row["key"]:row for row in db.execute("SELECT key,payload,updated FROM runtime_cache WHERE key IN ('catalog','heartbeat')")}
+        cached={row["key"]:row for row in db.execute("SELECT key,payload,updated FROM runtime_cache WHERE key IN ('catalog','heartbeat','alpaca:catalog','operator:alpaca-test')")}
         heartbeat=cached.get('heartbeat')
         health=json.loads(heartbeat['payload']) if heartbeat else {}
         catalog=cached.get('catalog')
+        alpaca_catalog=cached.get('alpaca:catalog')
+        test=json.loads(cached['operator:alpaca-test']['payload']) if cached.get('operator:alpaca-test') else {}
+        verified=bool(settings.alpaca_enabled and test.get('fingerprint')==store.digest(settings.alpaca_key+'|'+settings.alpaca_secret+'|'+settings.alpaca_personal_user))
         return {**dict(counts),"onlineWindowSeconds":90,
             "grossByCurrency":[dict(row) for row in db.execute("SELECT currency,sum(price_milli)/1000.0 AS amount FROM orders WHERE revoked IS NULL AND price_milli IS NOT NULL GROUP BY currency")],
             "environment":settings.app_store_environment,"salesEnabled":settings.sales_enabled,
             "binance":settings.binance_enabled,
             "binanceEvents":health.get('binanceEvents',0) if settings.serverless else hub.binance_stream_events,
             "hyperliquidEvents":health.get('hlEvents',0) if settings.serverless else hub.hl_stream_events,
-            "instruments":len(json.loads(catalog['payload'])) if settings.serverless and catalog else (0 if settings.serverless else len(hub.catalog)),
+            "instruments":(len(json.loads(catalog['payload'])) if settings.serverless and catalog else (0 if settings.serverless else len(hub.catalog))) + (len(json.loads(alpaca_catalog['payload'])) if settings.alpaca_enabled and alpaca_catalog else 0),
             "apnsConfigured":settings.apns_configured,"verifierConfigured":billing.verifier.enabled,
             "runtime":"vercel" if settings.serverless else "server",
-            "stockFeeds":({"US":{"provider":"Alpaca · IEX","personal":True,"configured":bool(settings.alpaca_key and settings.alpaca_secret),"licensed":False,"enabled":True,"delaySeconds":0},"HK":{"provider":"暂停","personal":False,"configured":False,"licensed":False,"enabled":False,"delaySeconds":-1}} if settings.alpaca_enabled else {market:{"configured":bool(settings.td_key),"licensed":settings.td_display_rights,
-                "enabled":bool(settings.stocks_enabled and delay>=0),"delaySeconds":delay}
-                for market,delay in [("US",settings.td_us_delay),("HK",settings.td_hk_delay)]}),
+            "stockFeeds":{"US":{"provider":"Alpaca · IEX","personal":True,"configured":bool(settings.alpaca_key and settings.alpaca_secret),
+                "licensed":False,"enabled":settings.alpaca_enabled,"delaySeconds":0,"connectionVerified":verified,"checkedAt":test.get("checkedAt") if verified else None},
+                "HK":{"provider":"暂停","personal":False,"configured":False,"licensed":False,"enabled":False,"delaySeconds":-1}},
             "workerOnline":bool(heartbeat and heartbeat['updated']>timestamp-45),"database":"PostgreSQL" if store.is_postgres else "SQLite"}
+
+    from .operator_routes import mount_operator_routes
+    if runtime:mount_operator_routes(app,settings,store,hub,runtime,session)
 
     @app.get("/admin/api/activities")
     def activities(request: Request, search: str = "", offset: int = 0):

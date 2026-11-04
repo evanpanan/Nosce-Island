@@ -149,7 +149,8 @@ struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 if store.catalogLoading { ProgressView(tr("正在加载市场…", "Loading markets…")) }
                 if let notice = store.catalogNotice { Text(notice).font(.caption).foregroundStyle(.orange) }
-                if ["US", "HK"].contains(market), !store.catalog.contains(where: { $0.market == market }) {
+                if market == "US", let notice = store.stockNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+                if store.stockNotice == nil, ["US", "HK"].contains(market), !store.catalog.contains(where: { $0.market == market }) {
                     Text(tr("该市场的股票数据尚未开放；合约报价不作为股票报价展示。", "Stock data for this market is not available yet. Contract prices are not exchange stock quotes."))
                         .font(.caption).foregroundStyle(.secondary)
                 }

@@ -19,12 +19,21 @@ class APNs:
         self.key = None
         self.jwt = ""
         self.jwt_at = 0
+        self.key_signature = None
+        self.reload_key()
+
+    def reload_key(self):
+        settings=self.settings
+        signature=(settings.apns_key_pem,settings.apns_key_file,settings.apns_team_id,settings.apns_key_id)
+        if signature==self.key_signature:return
+        self.key_signature=signature;self.key=None;self.jwt_at=0;self.jwt=""
         if settings.apns_configured:
             self.key = serialization.load_pem_private_key((settings.apns_key_pem.encode() if settings.apns_key_pem else Path(settings.apns_key_file).read_bytes()), password=None)
             if not isinstance(self.key, ec.EllipticCurvePrivateKey) or not isinstance(self.key.curve, ec.SECP256R1):
                 raise ValueError("APNs requires a P-256 signing key")
 
     def bearer(self):
+        self.reload_key()
         if not self.key:
             raise RuntimeError("APNs signing is not configured")
         if now() - self.jwt_at > 3000:
