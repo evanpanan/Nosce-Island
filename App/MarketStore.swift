@@ -204,7 +204,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         loading = false
         scheduleLocalActivityUpdate()
         syncWidgets(force: true)
-        // Server-owned subscriptions continue. App-updated activities explicitly become stale on background.
+        // Preserve real quote expiry on background; entering Home is not a stale market event.
     }
     func reloadCatalog() {
         guard !catalogLoading else { return }
@@ -365,7 +365,7 @@ func tr(_ chinese: String, _ english: String) -> String {
                 }
             }
             let activity = try Activity.request(attributes: MarketActivityAttributes(sessionName: "Nosce Island"),
-                content: ActivityContent(state: state, staleDate: islandQuotes.map(\.staleAt).min()), pushType: remoteUpdates ? .token : nil)
+                content: ActivityContent(state: state, staleDate: state.visibleQuotes.first?.staleAt), pushType: remoteUpdates ? .token : nil)
             observe(activity)
             activityRunning = true
             lastActivityResult = remoteUpdates
@@ -379,7 +379,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         localRevision += 1
         guard localPublishTask == nil else { return }
         let publisherID = UUID(); localPublisherID = publisherID
-        // One serial writer coalesces rapid ticks and preserves pause/resume ordering.
+        // One serial writer coalesces rapid ticks and preserves background/resume ordering.
         localPublishTask = Task { [weak self] in
             guard let self else { return }
             defer { if self.localPublisherID == publisherID { self.localPublishTask = nil } }
@@ -398,8 +398,9 @@ func tr(_ chinese: String, _ english: String) -> String {
                 let elapsed = max(0,Int(Date().timeIntervalSince(self.pageOrigin) / 5))
                 let page = self.foreground ? (self.initialPage + elapsed) % pageCount : activity.content.state.pageIndex
                 let state = MarketActivityAttributes.ContentState(quotes:current,redUp:self.redUp,foregroundOnly:true,page:page)
-                let staleDate = self.foreground ? current.map(\.staleAt).max() : Date()
-                await activity.update(ActivityContent(state:state,staleDate:staleDate))
+                let staleDate = state.visibleQuotes.first?.staleAt
+                // Ordinary price ticks never request an alert or an expanded presentation.
+                await activity.update(ActivityContent(state:state,staleDate:staleDate), alertConfiguration: nil)
                 if revision == self.localRevision && (!self.foreground || current.count <= 1) { return }
             }
         }

@@ -20,6 +20,21 @@ import Foundation
         let quote = frame.quotes[0]
         precondition(quote.id == "hl:BTC" && quote.currency == "USD" && quote.basis == "mark")
         precondition(quote.staleAt.timeIntervalSince(quote.receivedAt) <= 90)
+        var compact = quote
+        compact.price = 78382; compact.currency = "USD"
+        precondition(compact.compactPrice == "$78382.00")
+        compact.price = 92.94; compact.currency = "USDT"
+        precondition(compact.compactPrice == "92.94")
+        compact.price = 1250000; compact.currency = "USD"
+        precondition(compact.compactPrice == "$1.25M")
+        compact.price = 0.00000001
+        precondition(compact.compactPrice != "$0.0000")
+        let receipt = Date(timeIntervalSince1970: 1700000000)
+        compact.receivedAt = receipt; compact.updatedAt = receipt
+        compact.delaySeconds = 0; compact.marketState = "open"
+        precondition(!compact.isStale(at: receipt.addingTimeInterval(1)))
+        precondition(compact.isStale(at: receipt.addingTimeInterval(90)))
+
         let roundtrip = try JSONDecoder().decode(IslandQuote.self, from: JSONEncoder().encode(quote))
         precondition(roundtrip == quote)
         var object = try JSONSerialization.jsonObject(with: JSONEncoder().encode(quote)) as! [String: Any]

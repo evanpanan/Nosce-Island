@@ -38,26 +38,24 @@ struct NosceLiveActivity: Widget {
                     }.padding(.vertical, 6)
                 }
             } compactLeading: {
-                HStack(spacing:3) {
-                    if context.isStale {
-                        Image(systemName:"exclamationmark.circle").foregroundStyle(.orange).font(.system(size:9))
-                    }
-                    VStack(alignment:.leading,spacing:1) {
-                        ForEach(context.state.visibleQuotes) { quote in
-                            Text((quote.isStale(at:Date()) ? "! " : "") + quote.symbol)
-                                .font(.system(size:context.state.visibleQuotes.count > 1 ? 9 : 11,weight:.semibold))
-                                .lineLimit(1).minimumScaleFactor(0.7)
+                if let quote = context.state.visibleQuotes.first {
+                    HStack(spacing: 2) {
+                        if context.isStale || quote.isStale(at: Date()) {
+                            Image(systemName: "clock").font(.system(size: 8)).foregroundStyle(.orange)
                         }
-                    }
+                        Text(quote.symbol)
+                            .font(.system(size: 10, weight: .semibold))
+                            .lineLimit(1).minimumScaleFactor(0.8)
+                    }.frame(width: 32, alignment: .leading)
                 }
             } compactTrailing: {
-                VStack(alignment:.trailing,spacing:1) {
-                    ForEach(context.state.visibleQuotes) { quote in
-                        Text(quote.formattedPrice)
-                            .font(.system(size:context.state.visibleQuotes.count > 1 ? 9 : 11,weight:.medium,design:.monospaced))
-                            .lineLimit(1).minimumScaleFactor(0.55)
-                            .foregroundStyle(priceColor(quote, redUp: context.state.redUp))
-                    }
+                if let quote = context.state.visibleQuotes.first {
+                    Text(quote.compactPrice)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .foregroundStyle(priceColor(quote, redUp: context.state.redUp))
+                        .frame(width: 68, alignment: .trailing)
+                        .accessibilityLabel(quote.symbol + " " + quote.formattedPrice)
                 }
             } minimal: {
                 if context.isStale {
@@ -78,14 +76,14 @@ struct NosceLiveActivity: Widget {
     }
     private func updateNote(_ context: ActivityViewContext<MarketActivityAttributes>) -> String {
         let note = context.state.foregroundOnly
-            ? local("App 离开前台后暂停更新 · 返回 App 继续", "Updates pause outside the app · return to resume")
+            ? local("前台更新 · 返回 App 获取最新报价", "App updates · open app for latest quote")
             : local("行情由服务器更新 · 注意报价状态", "Server updates · check quote status")
         let group = context.state.pageCount > 1
             ? " · \(context.state.pageIndex + 1)/\(context.state.pageCount)" : ""
         return note + group
     }
     private func status(_ context: ActivityViewContext<MarketActivityAttributes>) -> some View {
-        return Text(context.isStale ? local("更新已暂停", "UPDATES PAUSED") : context.state.foregroundOnly ? local("App 行情", "APP FEED") : local("服务器行情", "SERVER FEED"))
+        return Text(context.isStale ? local("报价待刷新", "QUOTE OUTDATED") : context.state.foregroundOnly ? local("App 行情", "APP FEED") : local("服务器行情", "SERVER FEED"))
             .font(.caption2.bold()).foregroundStyle(context.isStale ? .orange : .secondary)
     }
     private func row(_ quote: IslandQuote, redUp: Bool) -> some View {

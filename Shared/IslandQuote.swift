@@ -21,6 +21,13 @@ struct IslandQuote: Codable, Hashable, Identifiable {
     var formattedPrice: String {
         currency == "USDT" ? price.formatted(.number.precision(.fractionLength(price < 1 ? 4 : 2))) + " USDT" : price.formatted(.currency(code: currency).precision(.fractionLength(price < 1 ? 4 : 2)))
     }
+    /// Tight Dynamic Island price: currency and precision remain available in the expanded view.
+    var compactPrice: String {
+        let prefix = currency == "USD" ? "$" : currency == "HKD" ? "HK$" : ""
+        let unit: Double = price >= 1_000_000_000 ? 1_000_000_000 : price >= 1_000_000 ? 1_000_000 : 1
+        let suffix = unit == 1_000_000_000 ? "B" : unit == 1_000_000 ? "M" : ""
+        return prefix + String(format: price < 0.0001 ? "%.2g" : price < 1 ? "%.4f" : "%.2f", locale: Locale(identifier: "en_US_POSIX"), price / unit) + suffix
+    }
     var formattedChange: String {
         guard let change else { return "—" }
         return String(format: "%+.2f%%", change)
