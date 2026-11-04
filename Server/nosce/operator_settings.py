@@ -27,6 +27,8 @@ FIELDS={
  'sales_enabled':('开放购买','bool'),
  'privacy_url':('隐私政策 HTTPS 地址','url'),
  'terms_url':('用户协议 HTTPS 地址','url'),
+ 'ios_download_url':('iOS 下载 / TestFlight HTTPS 地址','url'),
+ 'android_download_url':('Android 下载 HTTPS 地址','url'),
 }
 KEY='operator:settings:v1'
 

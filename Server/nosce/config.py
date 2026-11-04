@@ -23,6 +23,8 @@ class Settings:
     sales_enabled: bool = False
     privacy_url: str = ""
     terms_url: str = ""
+    ios_download_url: str = ""
+    android_download_url: str = ""
     database: str = "/data/nosce.sqlite3"
     token_key: str = ""
     bundle_id: str = "com.cooper.nosceisland"
@@ -79,6 +81,8 @@ class Settings:
             sales_enabled=os.getenv("COMMERCE_SALES_ENABLED", "false") == "true",
             privacy_url=os.getenv("PUBLIC_PRIVACY_URL", ""),
             terms_url=os.getenv("PUBLIC_TERMS_URL", ""),
+            ios_download_url=os.getenv("PUBLIC_IOS_DOWNLOAD_URL", ""),
+            android_download_url=os.getenv("PUBLIC_ANDROID_DOWNLOAD_URL", ""),
             database=os.getenv("DATABASE_URL") or os.getenv("DATABASE", "/data/nosce.sqlite3"),
             token_key=os.getenv("TOKEN_ENCRYPTION_KEY", ""),
             bundle_id=os.getenv("APPLE_BUNDLE_ID", "com.cooper.nosceisland"),

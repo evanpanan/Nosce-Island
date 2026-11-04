@@ -102,7 +102,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     @asynccontextmanager
     async def request_database(path,metrics):
         # Public HTML, configuration and liveness require no database round trip.
-        public=path in {'/','/admin','/healthz','/admin/api/config'}
+        public=path in {'/','/admin','/healthz','/admin/api/config'} or path.startswith('/site-assets/')
         if hasattr(store.db,'request_session') and not public:
             async with store.db.request_session(metrics):yield
         else:yield
@@ -118,14 +118,15 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
                 return JSONResponse({"detail": "Invalid content length"}, status_code=400)
             # Reverse proxy also enforces a body limit for chunked transfers.
         async with request_database(request.url.path,metrics):
-            configured=request.url.path.startswith(('/readyz','/v1/catalog','/v1/quotes','/v1/widget','/v1/sessions','/v1/me','/v1/app-store','/v1/purchases','/admin/api/overview','/admin/api/services'))
+            configured=request.url.path.startswith(('/api/public/downloads','/readyz','/v1/catalog','/v1/quotes','/v1/widget','/v1/sessions','/v1/me','/v1/app-store','/v1/purchases','/admin/api/overview','/admin/api/services'))
             with runtime.bind() if configured else nullcontext():
                 if settings.serverless and request.url.path.startswith(("/readyz","/v1/catalog","/v1/sessions")):
                     load_snapshot()
                 result = await call_next(request)
         result.headers['Server-Timing']='app;dur=%.1f, db_connect;dur=%.1f, db;dur=%.1f, queries;desc="%s"'%(
             (time.perf_counter()-started)*1000,metrics.get('connect_ms',0),metrics.get('query_ms',0),metrics.get('queries',0))
-        result.headers["Cache-Control"] = "no-store"
+        if not request.url.path.startswith('/site-assets/'):
+            result.headers["Cache-Control"] = "no-store"
         result.headers["X-Content-Type-Options"] = "nosniff"
         return result
 
@@ -150,10 +151,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         if any(key not in hub.catalog for key in symbols):
             raise HTTPException(422, "Instrument is unavailable or not licensed")
 
-    @app.get("/")
-    async def home():
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse("/admin")
+    from .public_site import mount_public_site
+    mount_public_site(app, settings)
 
     @app.get("/healthz")
     async def health():
