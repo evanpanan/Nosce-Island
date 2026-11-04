@@ -65,7 +65,7 @@ def mount_admin(app, settings, store, hub, billing):
 
     @app.get("/admin/api/config")
     async def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.3"}
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.4"}
 
     @app.get("/admin",response_class=HTMLResponse)
     async def page():
