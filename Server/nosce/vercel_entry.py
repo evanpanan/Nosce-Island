@@ -18,7 +18,7 @@ else:
     async def setup():
         return HTMLResponse(Path(__file__).with_name("admin.html").read_text(),headers={"Cache-Control":"no-store","X-Frame-Options":"DENY"})
     @app.get("/admin/api/config")
-    async def config():return {"configured":False,"requiresTotp":False,"version":"0.6.2","missing":missing}
+    async def config():return {"configured":False,"requiresTotp":False,"version":"0.6.3","missing":missing}
     @app.get("/healthz",status_code=503)
     async def health():return {"ok":False,"setupRequired":missing}
     @app.api_route("/{path:path}",methods=["GET","POST","DELETE"])
