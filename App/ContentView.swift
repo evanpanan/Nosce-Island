@@ -32,7 +32,7 @@ struct ContentView: View {
                 HStack {
                     HStack(spacing: 8) { Image("WaveMark").resizable().scaledToFit().frame(width: 28, height: 28); Text("NOSCE ISLAND").font(.caption.bold()).tracking(2) }
                     Spacer()
-                    Text("0.6.0").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.1").font(.caption2.monospaced()).foregroundStyle(.secondary)
                 }.foregroundStyle(.mint)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("行情，抬眼即见。", "Markets. At a glance.")).font(.largeTitle.bold())
@@ -53,6 +53,7 @@ struct ContentView: View {
                                 Text(item.symbol).font(.caption.bold())
                                 Spacer(minLength:4)
                                 Text(store.quotes[item.id]?.formattedPrice ?? "—")
+                                    .foregroundStyle(store.color(store.quotes[item.id]?.change))
                                     .font(.caption.monospacedDigit().bold()).lineLimit(1).minimumScaleFactor(0.6)
                             }
                         }
@@ -106,7 +107,7 @@ struct ContentView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 4) {
-                    Text(quote?.formattedPrice ?? "—").font(.title3.monospacedDigit().bold())
+                    Text(quote?.formattedPrice ?? "—").font(.title3.monospacedDigit().bold()).foregroundStyle(store.color(quote?.change))
                     Text((quote?.formattedChange ?? "—") + " · " + (quote?.basis == "last" ? tr("日涨跌", "DAY") : "24h")).font(.caption.monospacedDigit()).foregroundStyle(store.color(quote?.change))
                 }
             }

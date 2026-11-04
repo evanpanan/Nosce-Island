@@ -82,3 +82,15 @@ extension IslandQuote {
         try values.encode(delaySeconds, forKey: .delaySeconds); try values.encode(marketState, forKey: .marketState)
     }
 }
+
+/// Market direction and the user's color convention are independent of quote freshness.
+/// A stale quote keeps its direction color; warning icons and timestamps communicate age.
+enum QuotePriceTone: Equatable { case green, red, neutral }
+
+extension IslandQuote {
+    static func priceTone(change: Double?, redUp: Bool) -> QuotePriceTone {
+        guard let change, change.isFinite, change != 0 else { return .neutral }
+        return (change > 0) != redUp ? .green : .red
+    }
+    func priceTone(redUp: Bool) -> QuotePriceTone { Self.priceTone(change: change, redUp: redUp) }
+}

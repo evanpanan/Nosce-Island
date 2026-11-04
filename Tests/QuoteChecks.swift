@@ -2,6 +2,16 @@ import Foundation
 
 @main struct QuoteChecks {
     static func main() throws {
+        precondition(IslandQuote.priceTone(change: 1, redUp: false) == .green)
+        precondition(IslandQuote.priceTone(change: -1, redUp: false) == .red)
+        precondition(IslandQuote.priceTone(change: 1, redUp: true) == .red)
+        precondition(IslandQuote.priceTone(change: -1, redUp: true) == .green)
+        let neutralValues: [Double?] = [nil, 0, Double.nan, Double.infinity]
+        for value in neutralValues {
+            precondition(IslandQuote.priceTone(change: value, redUp: false) == .neutral)
+            precondition(IslandQuote.priceTone(change: value, redUp: true) == .neutral)
+        }
+
         let url = URL(fileURLWithPath: CommandLine.arguments[1])
         let data = try Data(contentsOf: url)
         struct Frame: Decodable { var quotes: [IslandQuote] }

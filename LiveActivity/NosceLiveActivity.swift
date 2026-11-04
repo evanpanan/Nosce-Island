@@ -56,7 +56,7 @@ struct NosceLiveActivity: Widget {
                         Text(quote.formattedPrice)
                             .font(.system(size:context.state.visibleQuotes.count > 1 ? 9 : 11,weight:.medium,design:.monospaced))
                             .lineLimit(1).minimumScaleFactor(0.55)
-                            .foregroundStyle(context.isStale || quote.isStale(at:Date()) ? .orange : .white)
+                            .foregroundStyle(priceColor(quote, redUp: context.state.redUp))
                     }
                 }
             } minimal: {
@@ -68,6 +68,13 @@ struct NosceLiveActivity: Widget {
             }
             .widgetURL(URL(string: "nosceisland://watch"))
             .keylineTint(.mint)
+        }
+    }
+    private func priceColor(_ quote: IslandQuote, redUp: Bool) -> Color {
+        switch quote.priceTone(redUp: redUp) {
+        case .green: return .green
+        case .red: return .red
+        case .neutral: return .secondary
         }
     }
     private func local(_ zh: String, _ en: String) -> String {
@@ -94,9 +101,10 @@ struct NosceLiveActivity: Widget {
             }
             Spacer(minLength: 4)
             Text(quote.formattedPrice).font(.headline.monospacedDigit()).lineLimit(1).minimumScaleFactor(0.6)
-            if let change = quote.change {
+                .foregroundStyle(priceColor(quote, redUp: redUp))
+            if quote.change != nil {
                 Text(quote.formattedChange).font(.caption.monospacedDigit())
-                    .foregroundStyle((change >= 0) != redUp ? .mint : .red)
+                    .foregroundStyle(priceColor(quote, redUp: redUp))
             }
         }
     }

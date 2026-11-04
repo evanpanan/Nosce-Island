@@ -76,7 +76,7 @@ struct MarketWidgetView: View {
             if let item = items.first {
                 Text(item.symbol).font(.title2.bold()).lineLimit(1).minimumScaleFactor(0.7)
                 if let quote = entry.snapshot.quote(for: item.id) {
-                    Text(quote.formattedPrice).font(.system(size: 23, weight: .semibold, design: .rounded))
+                    Text(quote.formattedPrice).foregroundStyle(changeColor(quote)).font(.system(size: 23, weight: .semibold, design: .rounded))
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                     HStack(spacing: 5) {
                         Text(quote.formattedChange).foregroundStyle(changeColor(quote))
@@ -102,7 +102,7 @@ struct MarketWidgetView: View {
             if let quote {
                 if quote.isStale(at: entry.date) { Image(systemName: "clock").font(.system(size: 9)).foregroundStyle(.orange).accessibilityLabel(widgetText("旧报价", "Old quote")) }
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text(quote.formattedPrice).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    Text(quote.formattedPrice).foregroundStyle(changeColor(quote)).font(.system(size: 12, weight: .medium)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     Text(quote.formattedChange).font(.system(size: 10)).monospacedDigit().foregroundStyle(changeColor(quote))
                 }
             } else { Text("—").font(.caption).foregroundStyle(.secondary) }
@@ -120,8 +120,11 @@ struct MarketWidgetView: View {
         }.font(.system(size: 9)).lineLimit(1).minimumScaleFactor(0.7)
     }
     private func changeColor(_ quote: IslandQuote) -> Color {
-        guard let change = quote.change else { return .secondary }
-        return (change >= 0) != entry.snapshot.redUp ? .mint : .red
+        switch quote.priceTone(redUp: entry.snapshot.redUp) {
+        case .green: return .green
+        case .red: return .red
+        case .neutral: return .secondary
+        }
     }
 }
 private struct MarketWidgetBackground: ViewModifier {

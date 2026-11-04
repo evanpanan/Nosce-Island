@@ -82,8 +82,11 @@ func tr(_ chinese: String, _ english: String) -> String {
         return Array(chosen.dropFirst(index).prefix(1))
     }
     func color(_ change: Double?) -> Color {
-        guard let change else { return .secondary }
-        return (change >= 0) != redUp ? .mint : .red
+        switch IslandQuote.priceTone(change: change, redUp: redUp) {
+        case .green: return .green
+        case .red: return .red
+        case .neutral: return .secondary
+        }
     }
     func toggle(_ item: Instrument) {
         if activityRunning || activityStarting {
