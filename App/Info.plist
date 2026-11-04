@@ -41,5 +41,7 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>NosceWidgetAppGroup</key>
+	<string>$(NOSCE_WIDGET_APP_GROUP)</string>
 </dict>
 </plist>

@@ -4,5 +4,9 @@
 <dict>
 	<key>aps-environment</key>
 	<string>$(NOSCE_APNS_ENVIRONMENT)</string>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(NOSCE_WIDGET_APP_GROUP)</string>
+	</array>
 </dict>
 </plist>

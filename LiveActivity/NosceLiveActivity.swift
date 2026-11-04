@@ -3,7 +3,10 @@ import SwiftUI
 import ActivityKit
 
 @main struct NosceWidgets: WidgetBundle {
-    var body: some Widget { NosceLiveActivity() }
+    var body: some Widget {
+        NosceMarketWidget()
+        NosceLiveActivity()
+    }
 }
 struct NosceLiveActivity: Widget {
     var body: some WidgetConfiguration {

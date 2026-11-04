@@ -17,6 +17,9 @@ struct ContentView: View {
             NavigationStack { settings }
                 .tabItem { Label(tr("设置", "Settings"), systemImage: "slider.horizontal.3") }.tag(2)
         }
+        .onOpenURL { url in
+            if url.scheme == "nosceisland", url.host == "watch" { tab = 0 }
+        }
         .tint(.mint)
         .task { store.startRefreshing(); await commerce.start() }
         .alert(tr("提示", "Notice"), isPresented: Binding(get: { store.message != nil }, set: { if !$0 { store.message = nil } })) {
@@ -188,11 +191,20 @@ struct ContentView: View {
                 LabeledContent(tr("语言", "Language"), value: tr("跟随系统", "System"))
                 LabeledContent(tr("币种", "Currency"), value: tr("按品种 USD / HKD / USDT", "Native USD / HKD / USDT"))
             }
+            Section(tr("主屏幕小组件", "Home Screen widgets")) {
+                Label(tr("小号 · 单个自选", "Small · one instrument"), systemImage: "square")
+                Label(tr("中号 · 最多三个自选", "Medium · up to three instruments"), systemImage: "rectangle")
+                Label(tr("大号 · 最多八个自选", "Large · up to eight instruments"), systemImage: "rectangle.portrait")
+                Text(tr("长按主屏幕，添加 Nosce Island 小组件并选择尺寸。内容跟随自选顺序与涨跌颜色；点击小组件返回 App。", "Touch and hold the Home Screen, add Nosce Island, then choose a size. Widgets follow watchlist order and gain/loss colors. Tap a widget to open the app."))
+                    .font(.caption).foregroundStyle(.secondary)
+                Text(tr("小组件由 iOS 调度刷新，显示报价时间与过期状态，不保证逐秒更新。", "iOS schedules widget refreshes. Quote times and stale status are shown; updates are not guaranteed every second."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(tr("数据管理", "Data management")) {
                 Button(tr("删除设备服务数据", "Delete device service data"), role: .destructive) { Task { await store.deleteServiceData() } }
             }
             Section {
-                Text("Nosce Island · 0.6.0").font(.subheadline.bold())
+                Text("Nosce Island · " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.0")).font(.subheadline.bold())
                 Text(tr("合约：币安 / Hyperliquid 标记价，无同口径参考价时不显示涨跌幅。独立股票：Twelve Data 报价与前收盘涨跌。币安和股票保留上游报价时间；Hyperliquid 显示服务器接收时间。", "Perpetuals: Binance / Hyperliquid mark prices; change is unavailable without a matching reference. Exchange stocks: Twelve Data quotes and change from previous close. Binance and stocks preserve upstream timestamps; Hyperliquid uses server receipt time."))
                     .font(.caption).foregroundStyle(.secondary)
             }

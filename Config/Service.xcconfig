@@ -4,3 +4,6 @@
 // Archive is blocked while this placeholder remains; ordinary builds still compile.
 NOSCE_API_BASE_URL = https:/$()/nosce-island.vercel.app
 NOSCE_APNS_ENVIRONMENT = production
+
+// Use the same registered App Group in the app and widget extension.
+NOSCE_WIDGET_APP_GROUP = group.com.cooper.nosceisland

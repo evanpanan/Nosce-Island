@@ -1,6 +1,7 @@
 import SwiftUI
 import ActivityKit
 import UIKit
+import WidgetKit
 
 func tr(_ chinese: String, _ english: String) -> String {
     Locale.preferredLanguages.first?.hasPrefix("zh") == true ? chinese : english
@@ -12,7 +13,9 @@ func tr(_ chinese: String, _ english: String) -> String {
     @Published var quotes: [String: IslandQuote] = [:]
     @Published var history: [String: [Double]] = [:]
     @Published var errors: [String: String] = [:]
-    @Published var redUp = UserDefaults.standard.bool(forKey: "redUp")
+    @Published var redUp = UserDefaults.standard.bool(forKey: "redUp") {
+        didSet { syncWidgets(force: true) }
+    }
     @Published var activityRunning = false
     @Published var activityStarting = false
     @Published var lastActivityResult = tr("尚未开启盯盘", "Watching is not active")
@@ -25,6 +28,8 @@ func tr(_ chinese: String, _ english: String) -> String {
     @Published var connection = tr("等待连接", "Waiting")
     @Published var backgroundStatus = tr("正在检查服务", "Checking service")
     @Published var stocksEnabled = false
+    private var lastWidgetWrite = Date.distantPast
+    private var lastWidgetReload = Date.distantPast
     private let api = NosceAPI()
     lazy var commerce = CommerceStore(api:api)
     private var streamTask: Task<Void, Never>?
@@ -54,7 +59,21 @@ func tr(_ chinese: String, _ english: String) -> String {
         }
         if let data = UserDefaults.standard.data(forKey: "serverCatalogV1"),
            let saved = try? JSONDecoder().decode([Instrument].self, from: data) { catalog = saved }
+        for quote in WidgetSnapshotStore.read().quotes where selected.contains(quote.id) { quotes[quote.id] = quote }
         syncActivityState()
+        syncWidgets(force: true)
+    }
+    private func syncWidgets(force: Bool = false) {
+        let date = Date()
+        guard force || date.timeIntervalSince(lastWidgetWrite) >= 30 else { return }
+        let items = chosen.map { WidgetWatchItem(id: $0.id, symbol: $0.symbol, currency: $0.currency) }
+        let snapshot = WidgetSnapshot(items: items, quotes: islandQuotes, redUp: redUp, savedAt: date)
+        guard WidgetSnapshotStore.write(snapshot) else { return }
+        lastWidgetWrite = date
+        if force || date.timeIntervalSince(lastWidgetReload) >= 60 {
+            lastWidgetReload = date
+            WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotStore.kind)
+        }
     }
     var chosen: [Instrument] { selected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
     var islandQuotes: [IslandQuote] { selected.compactMap { quotes[$0] } }
@@ -79,6 +98,7 @@ func tr(_ chinese: String, _ english: String) -> String {
             selected.append(item.id)
         }
         UserDefaults.standard.set(selected, forKey: "selectedServerV1")
+        syncWidgets(force: true)
         if foreground { startRefreshing() }
     }
     func startRefreshing() {
@@ -177,6 +197,7 @@ func tr(_ chinese: String, _ english: String) -> String {
             history[quote.id] = Array(history[quote.id,default:[]].suffix(90))
         }
         scheduleLocalActivityUpdate()
+        syncWidgets()
     }
     func stopRefreshing() {
         foreground = false
@@ -188,6 +209,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
         loading = false
         scheduleLocalActivityUpdate()
+        syncWidgets(force: true)
         // Server-owned subscriptions continue. App-updated activities explicitly become stale on background.
     }
     func reloadCatalog() {
