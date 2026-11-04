@@ -21,6 +21,7 @@ struct NosceLiveActivity: Widget {
                 Text(updateNote(context))
                     .font(.caption2).foregroundStyle(.secondary)
             }.padding(16)
+                .environment(\.colorScheme, .dark)
                 .activityBackgroundTint(Color(red: 0.045, green: 0.06, blue: 0.065))
                 .activitySystemActionForegroundColor(.white)
                 .widgetURL(URL(string: "nosceisland://watch"))

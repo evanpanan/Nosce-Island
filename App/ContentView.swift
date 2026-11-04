@@ -5,6 +5,7 @@ struct ContentView: View {
     @EnvironmentObject var store: MarketStore
     @EnvironmentObject var commerce: CommerceStore
     @State private var tab = 0
+    @AppStorage("appearanceV1") private var appearance = "dark"
     @State private var search = ""
     @State private var market = "All"
     
@@ -19,6 +20,13 @@ struct ContentView: View {
         }
         .onOpenURL { url in
             if url.scheme == "nosceisland", url.host == "watch" { tab = 0 }
+            if url.scheme == "nosceisland", url.host == "membership" { store.showPro = true }
+        }
+        .sheet(isPresented: $store.showPro) {
+            NavigationStack {
+                Form { membershipSection }.navigationTitle("Nosce Island Pro")
+                    .toolbar { ToolbarItem(placement: .confirmationAction) { Button(tr("完成", "Done")) { store.showPro = false } } }
+            }
         }
         .tint(MarketPalette.accent)
         .task { store.startRefreshing(); await commerce.start() }
@@ -58,18 +66,24 @@ struct ContentView: View {
                             }
                         }
                     }.padding(.horizontal,20).padding(.vertical,10)
-                        .background(.black,in:RoundedRectangle(cornerRadius:24)).padding(.horizontal,20)
+                        .background(.black,in:RoundedRectangle(cornerRadius:24)).environment(\.colorScheme, .dark).padding(.horizontal,20)
                     HStack {
                         Image(systemName: "hand.draw").foregroundStyle(.secondary)
-                        Text(tr("最多 8 个资产，逐个轮播；长按查看当前行情。", "Up to 8 assets, rotating one at a time; hold to expand."))
+                        Text(store.isPro ? tr("Pro · 最多 8 个资产逐个轮播，长按展开。", "Pro · up to 8 assets, rotating one at a time.") : tr("免费版 · 单资产灵动岛。Pro 可轮播最多 8 个资产。", "Free · one island asset. Pro rotates up to 8."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                }.padding(20).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 26))
+                }.padding(20).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26))
                 HStack {
                     Text(tr("正在关注", "Your watch")).font(.title3.bold())
                     Spacer()
                     Button { tab = 1 } label: { Image(systemName: "plus.circle").font(.title3) }
                         .accessibilityLabel(tr("添加资产", "Add instrument"))
+                }
+                if !store.isPro {
+                    Picker(tr("灵动岛与小号小组件显示", "Island and small widget asset"), selection: Binding(get: { store.activityIDs.first ?? "hl:BTC" }, set: { store.chooseWatch($0) })) {
+                        ForEach(store.chosen) { item in Text(item.symbol).tag(item.id) }
+                    }.disabled(store.activityRunning || store.activityStarting)
+                    Button(tr("查看 Pro 多资产权益", "Explore Pro multi-asset watching")) { store.showPro = true }.font(.caption)
                 }
                 Text(store.connection).font(.caption).foregroundStyle(.secondary)
                 ForEach(store.chosen) { item in quoteCard(item) }
@@ -95,7 +109,7 @@ struct ContentView: View {
                 Text(tr("实时活动受 iOS 管理，单次最长 8 小时；本版不人为缩短。", "iOS manages Live Activities, with an 8-hour maximum per session. No shorter app-imposed timer."))
                     .font(.caption2).foregroundStyle(.secondary)
             }.padding(20)
-        }.background(Color(red: 0.035, green: 0.045, blue: 0.055)).toolbar(.hidden, for: .navigationBar)
+        }.background(Color(uiColor: .systemGroupedBackground)).toolbar(.hidden, for: .navigationBar)
     }
     private func quoteCard(_ item: Instrument) -> some View {
         let quote = store.quotes[item.id]
@@ -132,7 +146,7 @@ struct ContentView: View {
                     }
                 }
             } else if store.loading { ProgressView().controlSize(.small) } else { Text(tr("暂时没有有效报价，正在重连。", "No valid quote yet. Reconnecting.")).font(.caption).foregroundStyle(.secondary) }
-        }.padding(18).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 20))
+        }.padding(18).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 20))
     }
     // Keep each section independently type-checked; the catalog can contain thousands of assets.
     private var instruments: some View {
@@ -176,9 +190,9 @@ struct ContentView: View {
     }
     private var selectedAssetsSection: some View {
         Section(tr("已选择 · 点按移除", "Selected · tap to remove")) {
-            ForEach(store.chosen) { item in
+            ForEach(store.savedInstruments) { item in
                 Button { store.toggle(item) } label: {
-                    HStack { Text(item.id); Spacer(); Image(systemName: "minus.circle") }
+                    HStack { Text(item.id); Spacer(); if !store.activeSelected.contains(item.id) { Text(tr("已保留 · Pro 启用", "Saved · needs Pro")).font(.caption) }; Image(systemName: "minus.circle") }
                 }
             }
         }
@@ -193,7 +207,7 @@ struct ContentView: View {
     }
     private var availableAssetsSection: some View {
         let matches = matchingAssets
-        return Section(tr("最多关注 8 个资产 · 灵动岛逐个轮播", "Follow up to 8 · island rotates one at a time")) {
+        return Section(store.isPro ? tr("Pro · 最多 8 个自选与轮播", "Pro · up to 8 watchlist and island assets") : tr("免费版 · 最多 3 个自选 / 单资产盯盘", "Free · 3 watchlist assets / one island asset")) {
             if matches.isEmpty {
                 emptySearchHint
             } else {
@@ -234,6 +248,11 @@ struct ContentView: View {
         Form {
             membershipSection
             Section(tr("显示", "Display")) {
+                Picker(tr("外观", "Appearance"), selection: $appearance) {
+                    Text(tr("跟随系统", "System")).tag("system")
+                    Text(tr("深色", "Dark")).tag("dark")
+                    Text(tr("浅色", "Light")).tag("light")
+                }
                 Toggle(tr("红涨绿跌", "Red for gains"), isOn: $store.redUp)
                     .onChange(of: store.redUp) { value in
                         UserDefaults.standard.set(value, forKey: "redUp")
@@ -245,8 +264,8 @@ struct ContentView: View {
             Section(tr("主屏幕小组件", "Home Screen widgets")) {
                 Text(store.widgetStockStatus).font(.caption).foregroundStyle(.secondary)
                 Label(tr("小号 · 单个自选", "Small · one instrument"), systemImage: "square")
-                Label(tr("中号 · 最多三个自选", "Medium · up to three instruments"), systemImage: "rectangle")
-                Label(tr("大号 · 最多八个自选", "Large · up to eight instruments"), systemImage: "rectangle.portrait")
+                Label(tr("Pro 中号 · 最多三个自选", "Pro medium · up to three instruments"), systemImage: "rectangle")
+                Label(tr("Pro 大号 · 最多八个自选", "Pro large · up to eight instruments"), systemImage: "rectangle.portrait")
                 Text(tr("长按主屏幕，添加 Nosce Island 小组件并选择尺寸。内容跟随自选顺序与涨跌颜色；点击小组件返回 App。", "Touch and hold the Home Screen, add Nosce Island, then choose a size. Widgets follow watchlist order and gain/loss colors. Tap a widget to open the app."))
                     .font(.caption).foregroundStyle(.secondary)
                 Text(tr("小组件由 iOS 调度刷新，显示报价时间与过期状态，不保证逐秒更新。", "iOS schedules widget refreshes. Quote times and stale status are shown; updates are not guaranteed every second."))
@@ -285,14 +304,27 @@ struct ContentView: View {
         }
         return " / \(period.value) \(unit)"
     }
+    private var membershipBenefits: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(tr("免费版", "Free"), systemImage: "checkmark.circle")
+            Text(tr("3 个自选 · 单资产灵动岛与锁屏 · 小号单资产小组件", "3 watchlist assets · single-asset Island and Lock Screen · small single-asset widget"))
+            Label("Pro", systemImage: "sparkles").foregroundStyle(MarketPalette.accent)
+            Text(tr("8 个自选 · 最多 8 个资产轮播 · 小、中、大尺寸小组件", "8 watchlist assets · rotate up to 8 assets · small, medium and large widgets"))
+            Text(tr("两版相同的行情刷新策略、配色、语言和外观；无强制广告或付费倒计时。后台送达与小组件刷新受 iOS 调度影响。", "Both plans share the same refresh policy, colors, language and themes. No forced ads or paid countdown. iOS controls background delivery and widget refreshes."))
+                .foregroundStyle(.secondary)
+            Text(tr("订阅到期保留原自选，启用前三个；灵动岛恢复单资产，中、大号小组件需 Pro。价格提醒、持仓盈亏、跨设备自选同步和公开美股服务不包含在本期权益中。", "When Pro expires, your watchlist is retained with the first 3 active. The Island returns to one asset; medium and large widgets require Pro. Price alerts, portfolio P&L, watchlist sync and public US stocks are not included."))
+                .foregroundStyle(.secondary)
+        }.font(.caption).padding(.vertical, 5)
+    }
     private var membershipSection: some View {
         Section(tr("会员", "Membership")) {
-            LabeledContent(tr("当前版本", "Current plan"), value: commerce.profile?.pro == true ? "Pro" : tr("免费版", "Free"))
+            LabeledContent(tr("当前版本", "Current plan"), value: store.isPro ? "Pro" : tr("免费版", "Free"))
             Text(tr("免注册 · 免登录 · 无广告", "No registration · No app sign-in · No ads"))
                 .font(.caption).foregroundStyle(.secondary)
             if let expiry = commerce.profile?.expiresAt, commerce.profile?.pro == true {
                 LabeledContent(tr("会员到期", "Expires"), value: Date(timeIntervalSince1970:expiry).formatted(date:.abbreviated,time:.omitted))
             }
+            membershipBenefits
             ForEach(commerce.products,id:\.id) { product in
                 Button { Task { await commerce.purchase(product) } } label: {
                     VStack(alignment:.leading,spacing:4) {
@@ -306,7 +338,7 @@ struct ContentView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             if commerce.products.isEmpty {
-                Text(tr("基础功能免费，高级功能即将推出。", "Basic features are free. More features are coming."))
+                Text(tr("购买暂未开放或商品暂不可用。月付与年付实际价格将在 App Store 商品就绪后显示；当前可继续免费使用。", "Purchases are not open or products are unavailable. Local monthly and annual prices appear when App Store products are ready. Free remains available."))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Button(tr("恢复购买", "Restore purchases")) { Task { await commerce.restore() } }.disabled(commerce.busy)

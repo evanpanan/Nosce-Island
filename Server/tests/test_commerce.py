@@ -128,6 +128,7 @@ def make_app(settings):
 def test_admin_auth_cookie_csrf_and_no_secret_exposure(tmp_path):
     secret="JBSWY3DPEHPK3PXP"
     settings=cfg(tmp_path,admin_password_hash=password_hash("test-only-password-strong"),admin_totp_secret=secret)
+    login_code=totp(secret,int(now()/30))
     app=make_app(settings)
     with TestClient(app,base_url="https://nosce.test") as client:
         assert client.get("/admin/api/users").status_code==401
@@ -135,7 +136,7 @@ def test_admin_auth_cookie_csrf_and_no_secret_exposure(tmp_path):
         assert client.get("/admin/api/orders",headers={"Authorization":"Bearer "+anon["token"]}).status_code==401
         page=client.get("/admin")
         assert "nonce-" in page.headers["content-security-policy"]
-        response=client.post("/admin/api/login",json={"username":"admin","password":"test-only-password-strong","code":totp(secret,int(now()/30))})
+        response=client.post("/admin/api/login",json={"username":"admin","password":"test-only-password-strong","code":login_code})
         assert response.status_code==200
         assert "httponly" in response.headers["set-cookie"].lower()
         assert "secure" in response.headers["set-cookie"].lower()
@@ -148,7 +149,7 @@ def test_admin_auth_cookie_csrf_and_no_secret_exposure(tmp_path):
         assert client.post("/admin/api/logout",headers={"X-CSRF-Token":csrf}).status_code==200
         assert client.get("/admin/api/overview").status_code==401
         # An already-used TOTP cannot mint a second administrator session.
-        assert client.post("/admin/api/login",json={"username":"admin","password":"test-only-password-strong","code":totp(secret,int(now()/30))}).status_code==401
+        assert client.post("/admin/api/login",json={"username":"admin","password":"test-only-password-strong","code":login_code}).status_code==401
 
 
 def test_admin_disabled_and_purchase_spoof_has_no_effect(tmp_path):

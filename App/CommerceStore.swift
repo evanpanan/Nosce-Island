@@ -15,7 +15,8 @@ struct AccountProfile: Decodable {
 }
 
 @MainActor final class CommerceStore: ObservableObject {
-    @Published var profile: AccountProfile?
+    var onProfileChange: ((AccountProfile?) -> Void)?
+    @Published var profile: AccountProfile? { didSet { onProfileChange?(profile) } }
     @Published var products: [Product] = []
     @Published var busy = false
     @Published var notice: String?
@@ -45,7 +46,10 @@ struct AccountProfile: Decodable {
                 self.profile = try await self.api.profile()
                 if self.profile?.verificationEnabled == true { try await self.linkStore() }
                 if let profile=self.profile, profile.purchaseEnabled, profile.storeLinked {
-                    self.products = try await Product.products(for:profile.productIds).filter { $0.type == .autoRenewable }
+                    self.products = try await Product.products(for:profile.productIds).filter { product in
+                        guard product.type == .autoRenewable, let period = product.subscription?.subscriptionPeriod else { return false }
+                        return period.value == 1 && (period.unit == .month || period.unit == .year)
+                    }.sorted { ($0.subscription?.subscriptionPeriod.unit == .month ? 0 : 1) < ($1.subscription?.subscriptionPeriod.unit == .month ? 0 : 1) }
                 } else { self.products = [] }
             } catch { self.products = [] }
         }

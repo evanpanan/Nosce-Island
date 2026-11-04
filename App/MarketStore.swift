@@ -16,6 +16,11 @@ func tr(_ chinese: String, _ english: String) -> String {
     @Published var redUp = UserDefaults.standard.bool(forKey: "redUp") {
         didSet { syncWidgets(force: true) }
     }
+    @Published var showPro = false
+    @Published var proExpiresAt: Date? = UserDefaults.standard.object(forKey: "verifiedProExpiryV1") as? Date
+    @Published var watchID = UserDefaults.standard.string(forKey: "singleWatchIDV1") ?? "hl:BTC"
+    private var membershipExpiryTask: Task<Void, Never>?
+    private var membershipRefreshTask: Task<Void, Never>?
     @Published var activityRunning = false
     @Published var activityStarting = false
     @Published var lastActivityResult = tr("尚未开启盯盘", "Watching is not active")
@@ -33,13 +38,58 @@ func tr(_ chinese: String, _ english: String) -> String {
     private var lastWidgetWrite = Date.distantPast
     private var lastWidgetReload = Date.distantPast
     private let api = NosceAPI()
-    lazy var commerce = CommerceStore(api:api)
+    lazy var commerce: CommerceStore = {
+        let value = CommerceStore(api: api)
+        value.onProfileChange = { [weak self] profile in self?.applyMembership(profile) }
+        return value
+    }()
+    var access: MembershipAccess { MembershipAccess(expiresAt: proExpiresAt) }
+    var isPro: Bool { access.isPro }
+    var watchlistLimit: Int { access.watchlistLimit }
+    var activeSelected: [String] { Array(selected.prefix(watchlistLimit)) }
+    var activityIDs: [String] { isPro ? activeSelected : [activeSelected.contains(watchID) ? watchID : (activeSelected.first ?? "hl:BTC")] }
+    var savedInstruments: [Instrument] { selected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
+    private func applyMembership(_ profile: AccountProfile?) {
+        let before = access.isPro
+        let next = profile?.pro == true ? profile?.expiresAt.map(Date.init(timeIntervalSince1970:)) : nil
+        proExpiresAt = next
+        UserDefaults.standard.set(next, forKey: "verifiedProExpiryV1")
+        scheduleMembershipExpiry()
+        if before != access.isPro { Task { await membershipChanged() } }
+        else { syncWidgets(force: true) }
+    }
+    private func scheduleMembershipExpiry() {
+        membershipExpiryTask?.cancel()
+        if let next = proExpiresAt, next > Date() {
+            membershipExpiryTask = Task { [weak self] in
+                do { try await Task.sleep(for: .seconds(max(0, next.timeIntervalSinceNow))) } catch { return }
+                guard let self, self.proExpiresAt == next else { return }
+                self.proExpiresAt = nil
+                UserDefaults.standard.removeObject(forKey: "verifiedProExpiryV1")
+                await self.membershipChanged()
+                if self.foreground { await self.commerce.refresh() }
+            }
+        }
+    }
+    private func membershipChanged() async {
+        // End obsolete multi-asset content before applying new access; keep the saved watchlist.
+        if activityRunning || activityStarting { await endActivity() }
+        syncWidgets(force: true)
+        if foreground { startRefreshing() }
+    }
+    func chooseWatch(_ id: String) {
+        guard activeSelected.contains(id), !activityRunning, !activityStarting else { return }
+        watchID = id
+        UserDefaults.standard.set(id, forKey: "singleWatchIDV1")
+        syncWidgets(force: true)
+    }
     private var streamTask: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
     private var mixedPublicTask: Task<Void, Never>?
     private var presenceTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var discoveryTask: Task<Void, Never>?
+    private var widgetEntitlementTask: Task<Void, Never>?
     private var widgetAccessTask: Task<Void, Never>?
     private var widgetAccessID = UUID()
     private var widgetAccessSymbols: [String] = []
@@ -68,12 +118,17 @@ func tr(_ chinese: String, _ english: String) -> String {
         for quote in WidgetSnapshotStore.read().quotes where selected.contains(quote.id) { quotes[quote.id] = quote }
         syncActivityState()
         syncWidgets(force: true)
+        scheduleMembershipExpiry()
     }
     private func syncWidgets(force: Bool = false) {
         let date = Date()
         guard force || date.timeIntervalSince(lastWidgetWrite) >= 30 else { return }
-        let items = chosen.map { WidgetWatchItem(id: $0.id, symbol: $0.symbol, currency: $0.currency) }
-        let snapshot = WidgetSnapshot(items: items, quotes: islandQuotes, redUp: redUp, savedAt: date)
+        let widgetIDs = isPro ? activeSelected : activityIDs
+        let items = widgetIDs.map { id -> WidgetWatchItem in
+            let item = catalog.first { $0.id == id } ?? Instrument(id: id)
+            return WidgetWatchItem(id: item.id, symbol: item.symbol, currency: item.currency)
+        }
+        let snapshot = WidgetSnapshot(items: items, quotes: islandQuotes, redUp: redUp, savedAt: date, proExpiresAt: proExpiresAt)
         guard WidgetSnapshotStore.write(snapshot) else { return }
         refreshWidgetAccess()
         lastWidgetWrite = date
@@ -82,8 +137,21 @@ func tr(_ chinese: String, _ english: String) -> String {
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotStore.kind)
         }
     }
+    private func refreshWidgetEntitlement() {
+        guard foreground, api.isConfigured, widgetEntitlementTask == nil else { return }
+        if let current = WidgetEntitlementAccessStore.read(), current.expiresAt > Date().addingTimeInterval(86400) { return }
+        widgetEntitlementTask = Task { [weak self] in
+            guard let self else { return }
+            defer { self.widgetEntitlementTask = nil }
+            if let access = try? await self.api.widgetEntitlementAccess(), !Task.isCancelled {
+                WidgetEntitlementAccessStore.write(access)
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotStore.kind)
+            }
+        }
+    }
     private func refreshWidgetAccess() {
-        let ids = selected.filter { $0.hasPrefix("stock:") }.sorted()
+        refreshWidgetEntitlement()
+        let ids = (isPro ? activeSelected : activityIDs).filter { $0.hasPrefix("stock:") }.sorted()
         if ids.isEmpty {
             widgetAccessTask?.cancel(); widgetAccessTask = nil; widgetAccessID = UUID()
             WidgetStockAccessStore.clear()
@@ -105,7 +173,7 @@ func tr(_ chinese: String, _ english: String) -> String {
             do {
                 let access = try await self.api.widgetStockAccess(symbols: ids)
                 guard !Task.isCancelled, self.widgetAccessID == job,
-                      self.selected.filter({ $0.hasPrefix("stock:") }).sorted() == ids else { return }
+                      (self.isPro ? self.activeSelected : self.activityIDs).filter({ $0.hasPrefix("stock:") }).sorted() == ids else { return }
                 guard WidgetStockAccessStore.write(access) else {
                     self.widgetStockStatus = tr("小组件共享空间不可用，请检查 App Group 签名配置", "Widget storage unavailable; check App Group signing")
                     return
@@ -119,11 +187,11 @@ func tr(_ chinese: String, _ english: String) -> String {
             }
         }
     }
-    var chosen: [Instrument] { selected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
-    var islandQuotes: [IslandQuote] { selected.compactMap { quotes[$0] } }
+    var chosen: [Instrument] { activeSelected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
+    var islandQuotes: [IslandQuote] { activityIDs.compactMap { quotes[$0] } }
     var visibleInstruments: [Instrument] {
         let index = observed?.content.state.pageIndex ?? 0
-        return Array(chosen.dropFirst(index).prefix(1))
+        return Array(activityIDs.dropFirst(index).prefix(1)).map { id in catalog.first { $0.id == id } ?? Instrument(id: id) }
     }
     func color(_ change: Double?) -> Color {
         MarketPalette.price(IslandQuote.priceTone(change: change, redUp: redUp))
@@ -137,7 +205,10 @@ func tr(_ chinese: String, _ english: String) -> String {
             guard selected.count > 1 else { return }
             selected.removeAll { $0 == item.id }
         } else {
-            guard selected.count < 8 else { message = tr("最多关注 8 个资产，灵动岛逐个轮播。", "Follow up to 8 instruments; the island rotates one at a time."); return }
+            guard selected.count < watchlistLimit else {
+                if !isPro { showPro = true } else { message = tr("Pro 最多关注 8 个资产。", "Pro supports up to 8 instruments.") }
+                return
+            }
             selected.append(item.id)
         }
         UserDefaults.standard.set(selected, forKey: "selectedServerV1")
@@ -147,6 +218,14 @@ func tr(_ chinese: String, _ english: String) -> String {
     func startRefreshing() {
         stopRefreshing()
         foreground = true
+        membershipRefreshTask?.cancel()
+        membershipRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled, self.foreground {
+                await self.commerce.refresh()
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
         refreshWidgetAccess()
         syncActivityState()
         scheduleLocalActivityUpdate()
@@ -167,7 +246,7 @@ func tr(_ chinese: String, _ english: String) -> String {
             while !Task.isCancelled && self.generation == generation {
                 self.loading = true
                 do {
-                    if self.selected.allSatisfy({ $0.hasPrefix("hl:") || $0.hasPrefix("bn:") }) {
+                    if self.activeSelected.allSatisfy({ $0.hasPrefix("hl:") || $0.hasPrefix("bn:") }) {
                         self.backgroundStatus = self.api.isConfigured ? tr("后台推送将在开启盯盘时检查", "Background push is checked when starting a watch") : tr("后台推送尚未上线", "Background push is not available yet")
                         self.connection = tr("正在直连公开行情…", "Connecting to public market data…")
                         if self.discoveryTask == nil && self.catalog.count <= 1 { self.reloadCatalog() }
@@ -179,7 +258,7 @@ func tr(_ chinese: String, _ english: String) -> String {
                         }
                         throw URLError(.networkConnectionLost)
                     }
-                    let stockIDs = self.selected.filter { $0.hasPrefix("stock:") }
+                    let stockIDs = self.activeSelected.filter { $0.hasPrefix("stock:") }
                     guard !stockIDs.isEmpty else { throw ServiceError.unavailable(422) }
                     let publicItems = self.chosen.filter { $0.id.hasPrefix("hl:") || $0.id.hasPrefix("bn:") }
                     self.mixedPublicTask?.cancel()
@@ -213,7 +292,7 @@ func tr(_ chinese: String, _ english: String) -> String {
                 } catch {
                     guard !Task.isCancelled, self.generation == generation else { return }
                     self.connection = error.localizedDescription
-                    for id in self.selected { self.errors[id] = tr("连接中断，等待重连；旧报价不会刷新时间。", "Disconnected; retrying. Old quote timestamps are preserved.") }
+                    for id in self.activeSelected { self.errors[id] = tr("连接中断，等待重连；旧报价不会刷新时间。", "Disconnected; retrying. Old quote timestamps are preserved.") }
                 }
                 self.mixedPublicTask?.cancel(); self.mixedPublicTask = nil
                 self.heartbeat?.cancel(); self.heartbeat = nil
@@ -244,6 +323,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         mixedPublicTask?.cancel(); mixedPublicTask = nil
         heartbeat?.cancel(); heartbeat = nil
         presenceTask?.cancel(); presenceTask = nil
+        membershipRefreshTask?.cancel(); membershipRefreshTask = nil
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
         loading = false
         scheduleLocalActivityUpdate()
@@ -319,6 +399,9 @@ func tr(_ chinese: String, _ english: String) -> String {
     func syncActivityState() {
         let activities = Activity<MarketActivityAttributes>.activities
         if let activity = activities.first(where: running) {
+            if activity.content.state.quotes.count > access.islandLimit {
+                Task { await endActivity() }; return
+            }
             if observed?.id != activity.id { observe(activity) }
             activityRunning = true
             // Recover server-updated content after reopening, without replacing it with an older local quote.
@@ -405,7 +488,7 @@ func tr(_ chinese: String, _ english: String) -> String {
                     remoteUpdates = status.ready && status.backgroundPush && status.environment == expected
                 }
             }
-            guard islandQuotes.count == selected.count, islandQuotes.allSatisfy({ !$0.isStale(at: Date()) }) else {
+            guard islandQuotes.count == activityIDs.count, islandQuotes.allSatisfy({ !$0.isStale(at: Date()) }) else {
                 message = tr("请等待全部已选资产的有效报价。", "Wait for valid quotes for all selected instruments."); return
             }
             let state = MarketActivityAttributes.ContentState(quotes: islandQuotes, redUp: redUp, foregroundOnly: !remoteUpdates)
@@ -441,7 +524,8 @@ func tr(_ chinese: String, _ english: String) -> String {
                 guard !Task.isCancelled, self.observed?.id == activity.id else { return }
                 let revision = self.localRevision
                 let previous = activity.content.state.quotes
-                let current = previous.map { old in
+                let allowed = Set(self.activityIDs)
+                let current = previous.filter { allowed.contains($0.id) }.map { old in
                     guard let next = self.quotes[old.id], next.updatedAt >= old.updatedAt else { return old }
                     return next
                 }
@@ -485,6 +569,8 @@ func tr(_ chinese: String, _ english: String) -> String {
             try await api.deleteInstallation()
             widgetAccessTask?.cancel(); widgetAccessID = UUID(); widgetAccessTask = nil
             WidgetStockAccessStore.clear()
+            widgetEntitlementTask?.cancel(); widgetEntitlementTask = nil
+            WidgetEntitlementAccessStore.clear()
             commerce.clearLocalProfile()
             stopRefreshing(); quotes = [:]; history = [:]
             message = tr("设备服务数据已删除。重新连接会生成新的匿名设备凭证。", "Device service data deleted. Reconnecting creates new anonymous credentials.")

@@ -60,3 +60,9 @@ document.querySelectorAll('[data-feed-mode]').forEach(button=>button.addEventLis
 document.addEventListener('visibilitychange',()=>{stopChosenFeed();if(!document.hidden)runChosenFeed();});
 window.addEventListener('pagehide',stopChosenFeed);window.addEventListener('pageshow',event=>{if(event.persisted)runChosenFeed();});
 renderMarket();runChosenFeed();
+
+// Reference USD prices are never charge amounts or a substitute for StoreKit pricing.
+let planPrices={monthly:4.99,yearly:39.99};let billingChoice='monthly';
+function renderPlanPrice(){const annual=billingChoice==='yearly';$('pro-price').textContent='$'+Number(planPrices[billingChoice]).toFixed(2);$('pro-period').textContent=annual?'/ 年':'/ 月';$('annual-note').textContent=annual?'USD 参考定价 · 折合约 $'+(planPrices.yearly/12).toFixed(2)+'/月，按年付费':'USD 参考定价 · 按月自动续订';document.querySelectorAll('[data-billing]').forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.billing===billingChoice)));}
+document.querySelectorAll('[data-billing]').forEach(button=>button.addEventListener('click',()=>{billingChoice=button.dataset.billing;renderPlanPrice();}));
+(async()=>{try{const response=await fetch('/api/public/plans',{credentials:'omit',signal:AbortSignal.timeout(8000)});if(!response.ok)return;const plans=await response.json();if(plans.referenceCurrency==='USD'&&Number.isFinite(plans.monthly)&&plans.monthly>0&&Number.isFinite(plans.yearly)&&plans.yearly>0){planPrices={monthly:plans.monthly,yearly:plans.yearly};renderPlanPrice();}}catch{/* Keep labelled reference prices; no purchase is performed here. */}})();

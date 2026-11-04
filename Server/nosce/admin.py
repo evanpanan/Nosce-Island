@@ -11,6 +11,7 @@ from fastapi import HTTPException, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field, ConfigDict
 from .models import now
+from .plans import plan_catalog,access_for_expiry
 
 
 def password_hash(password, salt=None):
@@ -65,7 +66,7 @@ def mount_admin(app, settings, store, hub, billing, runtime=None):
 
     @app.get("/admin/api/config")
     def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.7.7"}
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.8.0"}
 
     @app.get("/admin",response_class=HTMLResponse)
     def page():
@@ -143,7 +144,7 @@ def mount_admin(app, settings, store, hub, billing, runtime=None):
         alpaca_catalog=cached.get('alpaca:catalog')
         test=json.loads(cached['operator:alpaca-test']['payload']) if cached.get('operator:alpaca-test') else {}
         verified=bool(settings.alpaca_enabled and test.get('fingerprint')==store.digest(settings.alpaca_key+'|'+settings.alpaca_secret+'|'+settings.alpaca_personal_user))
-        return {**dict(counts),"onlineWindowSeconds":90,
+        return {**dict(counts),"membershipPlans":plan_catalog(),"onlineWindowSeconds":90,
             "grossByCurrency":[dict(row) for row in db.execute("SELECT currency,sum(price_milli)/1000.0 AS amount FROM orders WHERE revoked IS NULL AND price_milli IS NOT NULL GROUP BY currency")],
             "environment":settings.app_store_environment,"salesEnabled":settings.sales_enabled,
             "binance":settings.binance_enabled,
@@ -201,6 +202,7 @@ def mount_admin(app, settings, store, hub, billing, runtime=None):
         items=[]
         for row in rows:
             value=dict(row);value["billingRetry"]=bool(value["billingRetry"])
+            value["access"]=access_for_expiry(value["expiresAt"] if not value["deleted"] else None)
             items.append(value)
         return {"items":items,"nextOffset":offset+50 if len(rows)==50 else None}
 

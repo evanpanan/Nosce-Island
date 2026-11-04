@@ -16,8 +16,12 @@ jobs:
       - run: pip install -r Server/requirements.lock -r Server/requirements-dev.txt
       - run: python -m pytest -q
         working-directory: Server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --test Tests/Web/public-market.test.cjs
   ios:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4

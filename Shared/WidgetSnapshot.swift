@@ -12,6 +12,11 @@ struct WidgetSnapshot: Codable {
     var quotes: [IslandQuote]
     var redUp: Bool
     var savedAt: Date
+    // Display cache only; server privileges are independently verified from Apple transactions.
+    var proExpiresAt: Date? = nil
+
+    func access(at date: Date = Date()) -> MembershipAccess { MembershipAccess(expiresAt: proExpiresAt, at: date) }
+    func widgetItems(at date: Date = Date()) -> [WidgetWatchItem] { Array(items.prefix(access(at: date).islandLimit)) }
 
     static var empty: WidgetSnapshot {
         WidgetSnapshot(items: ["BTC", "ETH", "SOL"].map {
@@ -100,6 +105,45 @@ enum WidgetStockAccessStore {
             #endif
             return true
         } catch { return false }
+    }
+    static func clear() { if let url { try? FileManager.default.removeItem(at: url) } }
+}
+
+/// Shared local presentation limits. This is never accepted as proof by the server.
+struct MembershipAccess: Equatable {
+    let isPro: Bool
+    init(expiresAt: Date?, at date: Date = Date()) { isPro = expiresAt.map { $0 > date } ?? false }
+    var watchlistLimit: Int { isPro ? 8 : 3 }
+    var islandLimit: Int { isPro ? 8 : 1 }
+}
+
+/// Read-only capability for independently rechecking the widget's verified plan, including refunds.
+struct WidgetEntitlementAccess: Codable {
+    let origin: String
+    let token: String
+    let expiresAt: Date
+    var baseURL: URL? {
+        guard let url = URL(string: origin), url.scheme == "https", url.host != nil,
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+              url.path.isEmpty || url.path == "/" else { return nil }
+        return url
+    }
+    var valid: Bool { baseURL != nil && expiresAt > Date() && !token.isEmpty && token.count < 2048 }
+}
+enum WidgetEntitlementAccessStore {
+    private static var url: URL? { WidgetSnapshotStore.fileURL?.deletingLastPathComponent().appendingPathComponent("widget-entitlement-access-v1.json") }
+    static func read() -> WidgetEntitlementAccess? {
+        guard let url, let data = try? Data(contentsOf: url), data.count < 4096,
+              let value = try? JSONDecoder().decode(WidgetEntitlementAccess.self, from: data), value.valid else { return nil }
+        return value
+    }
+    static func write(_ value: WidgetEntitlementAccess) {
+        guard value.valid, let url, let data = try? JSONEncoder().encode(value) else { return }
+        #if os(iOS)
+        try? data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+        #else
+        try? data.write(to: url, options: .atomic)
+        #endif
     }
     static func clear() { if let url { try? FileManager.default.removeItem(at: url) } }
 }

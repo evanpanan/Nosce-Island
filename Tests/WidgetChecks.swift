@@ -31,6 +31,9 @@ final class WidgetFixtureProtocol: URLProtocol {
 @main struct WidgetChecks {
     static func main() async throws {
         let now = Date()
+        precondition(MembershipAccess(expiresAt: nil, at: now).watchlistLimit == 3)
+        precondition(MembershipAccess(expiresAt: now.addingTimeInterval(60), at: now).islandLimit == 8)
+        precondition(MembershipAccess(expiresAt: now, at: now).islandLimit == 1)
         let btc = WidgetWatchItem(id: "hl:BTC", symbol: "BTC", currency: "USD")
         let eth = WidgetWatchItem(id: "bn:ETHUSDT", symbol: "ETH", currency: "USDT")
         let old = IslandQuote(id: btc.id, symbol: btc.symbol, price: 100, change: nil, currency: "USD",
@@ -46,6 +49,14 @@ final class WidgetFixtureProtocol: URLProtocol {
         precondition(changedSelection.merging([fresh]).quotes.isEmpty)
         let decoded = try JSONDecoder().decode(WidgetSnapshot.self, from: JSONEncoder().encode(snapshot))
         precondition(decoded.items == [btc] && decoded.redUp)
+        var premium = WidgetSnapshot(items: [btc, eth], quotes: [fresh], redUp: false, savedAt: now, proExpiresAt: now.addingTimeInterval(60))
+        precondition(premium.widgetItems(at: now).count == 2)
+        precondition(premium.widgetItems(at: now.addingTimeInterval(61)).count == 1)
+        premium.proExpiresAt = nil
+        precondition(premium.widgetItems(at: now).count == 1)
+        // Old app snapshots decode as Free rather than accidentally unlocking Pro.
+        let legacy = try JSONDecoder().decode(WidgetSnapshot.self, from: Data(#"{"items":[],"quotes":[],"redUp":false,"savedAt":0}"#.utf8))
+        precondition(!legacy.access(at: now).isPro)
         WidgetFixtureProtocol.fixture = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
         let config = URLSessionConfiguration.ephemeral
         config.protocolClasses = [WidgetFixtureProtocol.self]

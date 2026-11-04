@@ -186,6 +186,12 @@ enum ServiceError: LocalizedError {
         _ = try await request("v1/installation", method: "DELETE")
         try forgetToken()
     }
+    func widgetEntitlementAccess() async throws -> WidgetEntitlementAccess {
+        struct Grant: Decodable { let token: String; let expiresAt: Double }
+        let data = try await request("v1/widget-entitlement-access", method: "POST")
+        let grant = try JSONDecoder().decode(Grant.self, from: data)
+        return WidgetEntitlementAccess(origin: try base.absoluteString, token: grant.token, expiresAt: Date(timeIntervalSince1970: grant.expiresAt))
+    }
     func profile() async throws -> AccountProfile {
         try JSONDecoder().decode(AccountProfile.self,from:await request("v1/me"))
     }

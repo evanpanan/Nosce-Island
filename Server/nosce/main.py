@@ -12,6 +12,7 @@ from .config import Settings
 from .database import Store
 from .models import SessionInput, StockQuoteRequest, now, Instrument, Quote
 from .providers import MarketHub
+from .plans import enforce_count
 
 log = logging.getLogger("nosce")
 
@@ -86,7 +87,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.7.7", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.8.0", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
     app.state.runtime=runtime
@@ -102,7 +103,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     @asynccontextmanager
     async def request_database(path,metrics):
         # Public HTML, configuration and liveness require no database round trip.
-        public=path in {'/','/admin','/healthz','/admin/api/config'} or path.startswith('/site-assets/')
+        public=path in {'/','/admin','/healthz','/admin/api/config','/api/public/plans'} or path.startswith('/site-assets/')
         if hasattr(store.db,'request_session') and not public:
             async with store.db.request_session(metrics):yield
         else:yield
@@ -203,6 +204,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         install=authenticate(authorization)
         if not personal_stocks_allowed(install):raise HTTPException(403,"Stock data is restricted to the personal test user")
         if not stocks.exchanges():raise HTTPException(503,"Stock data is not enabled")
+        enforce_count(store,install,value.symbols,"watchlist")
         try:quotes=await stocks.quotes(value.symbols)
         except ValueError:raise HTTPException(422,"Unsupported or unlicensed stock symbol")
         return {"quotes":[quote.wire() for quote in quotes],"serverTime":int(now()),"refreshAfterSeconds":5 if settings.alpaca_enabled else 15,
@@ -218,6 +220,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         if settings.alpaca_enabled and any(key.startswith("stock:") for key in value.symbols):
             raise HTTPException(422,"Personal IEX testing supports foreground updates only")
         validate_symbols(value.symbols)
+        enforce_count(store,install,value.symbols,"island")
         other_symbols = {key for row in store.sessions() if row["install"] != install for key in json.loads(row["symbols"])}
         watched = {key for owner, (ids, _, _) in hub.watches.items() if owner != install for key in ids}
         if len(other_symbols | watched | set(value.symbols)) > settings.max_symbols:
@@ -253,6 +256,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             if settings.alpaca_enabled and any(key.startswith("stock:") for key in ids):
                 raise HTTPException(403,"Use the private personal snapshot endpoint")
             validate_symbols(ids)
+            enforce_count(store,install,ids,"watchlist")
         except HTTPException:
             await socket.close(code=1008)
             return
@@ -269,6 +273,9 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
                 if hub.watches.get(install, (None,None,None))[2] != connection:
                     await socket.close(code=1008)
                     break
+                try:enforce_count(store,install,ids,"watchlist")
+                except HTTPException:
+                    await socket.close(code=1008);break
                 hub.watch(install, connection, ids)
                 await socket.send_json({"quotes": [hub.quotes[key].wire() for key in ids if key in hub.quotes],
                                         "serverTime": int(now())})

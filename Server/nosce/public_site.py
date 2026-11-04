@@ -3,6 +3,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from fastapi import HTTPException
 from fastapi.responses import FileResponse
+from .plans import plan_catalog
 
 PUBLIC = Path(__file__).with_name('public')
 ASSETS = {'site.css': 'text/css', 'site.js': 'text/javascript', 'market-feed.js': 'text/javascript', 'mark.svg': 'image/svg+xml'}
@@ -40,6 +41,10 @@ def mount_public_site(app, settings):
         return FileResponse(PUBLIC / name, media_type=ASSETS[name], headers={
             'Cache-Control': 'public, max-age=3600', 'Content-Security-Policy': CSP,
         })
+
+    @app.get('/api/public/plans', include_in_schema=False)
+    async def plans():
+        return plan_catalog()
 
     @app.get('/api/public/downloads', include_in_schema=False)
     async def downloads():

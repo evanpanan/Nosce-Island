@@ -209,9 +209,10 @@ class Billing:
         user = self.store.user(install)
         latest = self.entitlement(user["id"])
         pro = not user["deleted"] and bool(latest and latest > now())
+        from .plans import access_for_expiry
         renewal=self.renewal_status(user["id"])
         return {"userId":user["id"],"signedIn":bool(user["apple_hash"]),"email":user["email"],
-                "pro":pro,"expiresAt":latest,"autoRenew":renewal["auto_renew"] if renewal else None,
+                "pro":pro,"access":access_for_expiry(latest if pro else None),"expiresAt":latest,"autoRenew":renewal["auto_renew"] if renewal else None,
                 "billingRetry":bool(renewal["billing_retry"]) if renewal else False,"signInEnabled":False,"storeLinked":bool(user["app_store_hash"]),
                 "verificationEnabled":bool(self.verifier.enabled),
                 "purchaseEnabled":bool(self.settings.sales_enabled and self.verifier.enabled and self.products

@@ -16,17 +16,22 @@ struct MarketWidgetProvider: TimelineProvider {
     }
     func getTimeline(in context: Context, completion: @escaping (Timeline<MarketWidgetEntry>) -> Void) {
         Task {
-            let selected = WidgetSnapshotStore.read()
-            let fetched = await WidgetQuoteFetcher.fetch(selected.items)
+            var selected = WidgetSnapshotStore.read()
+            let capability = WidgetEntitlementAccessStore.read()
+            let verified = await WidgetEntitlementFetcher.check(capability)
+            if let verified { selected.proExpiresAt = verified.proExpiresAt }
+            let fetched = await WidgetQuoteFetcher.fetch(selected.widgetItems())
             // The app may change selection while these requests are in flight. Re-read its selection.
-            let latest = WidgetSnapshotStore.read()
+            var latest = WidgetSnapshotStore.read()
+            if let verified, capability?.token == WidgetEntitlementAccessStore.read()?.token { latest.proExpiresAt = verified.proExpiresAt }
             let cached = await WidgetQuoteCache.shared.quotes(updating: fetched)
             let value = latest.merging(cached)
             // The extension does not write the shared file: the foreground app is its sole writer.
             // This prevents competing writes from reverting the user's current selection.
             let date = Date()
             var entries = [MarketWidgetEntry(date: date, snapshot: value)]
-            for expiry in Set(value.quotes.map(\.staleAt).filter({ $0 > date })).sorted() {
+            let boundaries = value.quotes.map(\.staleAt) + [value.proExpiresAt].compactMap { $0 }
+            for expiry in Set(boundaries.filter({ $0 > date })).sorted() {
                 entries.append(MarketWidgetEntry(date: expiry.addingTimeInterval(1), snapshot: value))
             }
             completion(Timeline(entries: entries, policy: .after(date.addingTimeInterval(15 * 60))))
@@ -48,13 +53,24 @@ struct MarketWidgetView: View {
     let entry: MarketWidgetEntry
     @Environment(\.widgetFamily) private var family
     private var limit: Int { family == .systemSmall ? 1 : family == .systemMedium ? 3 : 8 }
-    private var items: [WidgetWatchItem] { Array(entry.snapshot.items.prefix(limit)) }
+    private var items: [WidgetWatchItem] { Array(entry.snapshot.widgetItems(at: entry.date).prefix(limit)) }
+    private var premiumLocked: Bool { family != .systemSmall && !entry.snapshot.access(at: entry.date).isPro }
     private var lastCheck: Date? { items.compactMap { entry.snapshot.quote(for: $0.id)?.receivedAt }.min() }
     var body: some View {
-        content
+        Group { if premiumLocked { upgradePrompt } else { content } }
             .environment(\.colorScheme, .dark)
             .modifier(MarketWidgetBackground())
-            .widgetURL(URL(string: "nosceisland://watch"))
+            .widgetURL(URL(string: premiumLocked ? "nosceisland://membership" : "nosceisland://watch"))
+    }
+    private var upgradePrompt: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Nosce Island Pro", systemImage: "sparkles").font(.headline).foregroundStyle(MarketPalette.accent)
+            Text(widgetText("中、大号多资产小组件属于 Pro", "Medium and large multi-asset widgets are included in Pro")).font(.subheadline)
+            Text(widgetText("免费版可使用小号单资产小组件。点此查看权益与恢复购买。", "Free includes a small single-asset widget. Tap to view plans or restore purchases."))
+                .font(.caption).foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+            Label(widgetText("查看 Pro 权益", "Explore Pro"), systemImage: "arrow.up.right").font(.caption).foregroundStyle(MarketPalette.accent)
+        }
     }
     private var content: some View {
         VStack(alignment: .leading, spacing: family == .systemSmall ? 8 : 6) {
@@ -164,5 +180,24 @@ private actor WidgetQuoteCache {
         let kept = Array(values.values.sorted { $0.updatedAt > $1.updatedAt }.prefix(16))
         if let encoded = try? JSONEncoder().encode(kept) { UserDefaults.standard.set(encoded, forKey: key) }
         return kept
+    }
+}
+
+private enum WidgetEntitlementFetcher {
+    struct Result { let proExpiresAt: Date? }
+    static func check(_ access: WidgetEntitlementAccess?) async -> Result? {
+        guard let access, access.valid, let base = access.baseURL else { return nil }
+        var request = URLRequest(url: base.appendingPathComponent("v1/widget/entitlement"))
+        request.timeoutInterval = 7
+        request.setValue("Bearer " + access.token, forHTTPHeaderField: "Authorization")
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let http = response as? HTTPURLResponse else { return nil }
+            if http.statusCode == 401 || http.statusCode == 403 { return Result(proExpiresAt: nil) }
+            guard http.statusCode == 200 else { return nil }
+            struct Payload: Decodable { let proExpiresAt: Double? }
+            let value = try JSONDecoder().decode(Payload.self, from: data)
+            return Result(proExpiresAt: value.proExpiresAt.map { Date(timeIntervalSince1970: $0) })
+        } catch { return nil } // Keep the cached verified expiry during an ordinary network outage.
     }
 }

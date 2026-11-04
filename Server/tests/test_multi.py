@@ -11,6 +11,13 @@ from nosce.apns import push_due
 from nosce.main import create_app
 from nosce.admin import password_hash,totp
 from test_service import settings,item,session,Sender
+from test_commerce import tx
+from nosce.apple_services import Billing
+
+def enable_pro(store,owner,settings):
+    config=replace(settings,app_store_products="pro.monthly",app_store_environment="Sandbox")
+    Billing(config,store).save(tx(store.user(owner)["id"]))
+
 
 
 def test_multi_watch_capacity_and_duplicates():
@@ -25,6 +32,7 @@ def test_multi_watch_capacity_and_duplicates():
 async def test_all_eight_assets_rotate_without_losing_order_or_exceeding_payload(settings):
     stamp=now();keys=['hl:asset'+str(i) for i in range(8)]
     store=Store(':memory:',settings.token_key);owner,_=store.register()
+    enable_pro(store,owner,settings)
     store.upsert(owner,session(symbols=keys),100,64)
     quotes={key:hyperliquid_quote(item(key),{'markPx':'100','prevDayPx':'90'},stamp) for key in keys}
     sender=Sender();hub=SimpleNamespace(quotes=quotes)
@@ -44,7 +52,7 @@ async def test_all_eight_assets_rotate_without_losing_order_or_exceeding_payload
 @pytest.mark.asyncio
 async def test_one_stale_asset_does_not_freeze_healthy_assets_or_forge_time(settings):
     stamp=now();keys=['hl:BTC','hl:ETH','hl:SOL']
-    store=Store(':memory:',settings.token_key);owner,_=store.register();store.upsert(owner,session(symbols=keys),100,64)
+    store=Store(':memory:',settings.token_key);owner,_=store.register();enable_pro(store,owner,settings);store.upsert(owner,session(symbols=keys),100,64)
     quotes={key:hyperliquid_quote(item(key),{'markPx':'100','prevDayPx':'90'},stamp if key!='hl:ETH' else stamp-1000) for key in keys}
     sender=Sender();await push_due(store,SimpleNamespace(quotes=quotes),sender,settings,stamp)
     assert len(sender.calls)==1
