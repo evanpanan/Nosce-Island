@@ -65,7 +65,7 @@ def mount_admin(app, settings, store, hub, billing):
 
     @app.get("/admin/api/config")
     async def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.0"}
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.6.2"}
 
     @app.get("/admin",response_class=HTMLResponse)
     async def page():
@@ -119,7 +119,12 @@ def mount_admin(app, settings, store, hub, billing):
     async def overview(request: Request):
         session(request)
         db = store.db
+        online = db.execute("""SELECT count(DISTINCT installs.user_id) AS users,count(*) AS devices
+          FROM runtime_cache JOIN installs ON runtime_cache.key=('presence:' || installs.id)
+          JOIN users ON users.id=installs.user_id
+          WHERE runtime_cache.updated>? AND users.deleted=0""",(now()-90,)).fetchone()
         return {"users":db.execute("SELECT count(*) FROM users WHERE deleted=0").fetchone()[0],
+            "onlineUsers":online["users"],"onlineDevices":online["devices"],"onlineWindowSeconds":90,
             "signedIn":db.execute("SELECT count(*) FROM users WHERE apple_hash IS NOT NULL AND deleted=0").fetchone()[0],
             "paying":db.execute("""SELECT count(DISTINCT user_id) FROM orders JOIN users ON users.id=orders.user_id
               LEFT JOIN renewals ON orders.original_id=renewals.original_id WHERE revoked IS NULL AND upgraded=0
@@ -148,7 +153,7 @@ def mount_admin(app, settings, store, hub, billing):
         items=[]
         for row in rows:
             value=dict(row);value["symbols"]=json.loads(value["symbols"])
-            value["groupCount"]=max(1,(len(value["symbols"])+1)//2)
+            value["groupCount"]=max(1,len(value["symbols"]))
             value["lastPage"]=int(value["lastPush"]//settings.push_interval)%value["groupCount"]+1 if value["lastPush"] else None
             items.append(value)
         return {"items":items,"nextOffset":offset+50 if len(rows)==50 else None}

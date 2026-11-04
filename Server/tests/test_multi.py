@@ -28,13 +28,15 @@ async def test_all_eight_assets_rotate_without_losing_order_or_exceeding_payload
     store.upsert(owner,session(symbols=keys),100,64)
     quotes={key:hyperliquid_quote(item(key),{'markPx':'100','prevDayPx':'90'},stamp) for key in keys}
     sender=Sender();hub=SimpleNamespace(quotes=quotes)
-    for n in range(5):
+    for n in range(8):
+        for quote in quotes.values():
+            quote.updated_at=quote.received_at=stamp+n*settings.push_interval
         await push_due(store,hub,sender,settings,stamp+n*settings.push_interval)
-    assert len(sender.calls)==5
+    assert len(sender.calls)==8
     seen=set()
     for _,state,stale,_,_ in sender.calls:
         assert [q['id'] for q in state['quotes']]==keys
-        page=state['page'];seen.update(q['id'] for q in state['quotes'][page*2:page*2+2])
+        page=state['page'];seen.update(q['id'] for q in state['quotes'][page:page+1])
         assert len(json.dumps({'aps':{'content-state':state,'timestamp':int(stamp),'stale-date':int(stale)}}).encode())<4096
     assert seen==set(keys)
 
@@ -64,7 +66,7 @@ def test_admin_activity_list_is_private_and_does_not_return_push_secrets(setting
         code=totp(settings.admin_totp_secret,int(now()/30))
         assert client.post('/admin/api/login',json={'username':'admin','password':'test-admin-password-only','code':code}).status_code==200
         data=client.get('/admin/api/activities').json()
-        assert data['items'][0]['groupCount']==2
+        assert data['items'][0]['groupCount']==3
         assert data['items'][0]['symbols']==['hl:BTC','hl:ETH','hl:SOL']
         assert 'a'*64 not in json.dumps(data)
         assert client.get('/admin/api/activities?search=not-present').json()['items']==[]

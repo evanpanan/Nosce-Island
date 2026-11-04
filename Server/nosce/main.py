@@ -79,7 +79,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.6.0", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.6.2", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
 
@@ -143,6 +143,12 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             raise HTTPException(503, "Installation capacity reached")
         identifier, token = store.register()
         return {"id": identifier, "token": token}
+
+    @app.post("/v1/presence")
+    async def presence(authorization: str | None = Header(default=None)):
+        install = authenticate(authorization)
+        store.put_cache("presence:" + install, {})
+        return {"ok": True}
 
     @app.get("/v1/catalog")
     async def catalog(authorization: str | None = Header(default=None),

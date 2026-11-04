@@ -115,6 +115,9 @@ enum ServiceError: LocalizedError {
     func status() async throws -> ServerStatus {
         try JSONDecoder().decode(ServerStatus.self, from: await request("readyz", allow503: true))
     }
+    func foregroundHeartbeat() async throws {
+        _ = try await request("v1/presence", method: "POST")
+    }
     func catalog() async throws -> ([Instrument], Bool) {
         var offset: Int? = 0
         var result: [Instrument] = []

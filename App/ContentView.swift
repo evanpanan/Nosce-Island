@@ -57,7 +57,7 @@ struct ContentView: View {
                         .background(.black,in:RoundedRectangle(cornerRadius:24)).padding(.horizontal,20)
                     HStack {
                         Image(systemName: "hand.draw").foregroundStyle(.secondary)
-                        Text(tr("最多 8 个资产，每组 2 个；长按查看当前组。", "Up to 8 assets in groups of 2; hold the island to expand."))
+                        Text(tr("最多 8 个资产，逐个轮播；长按查看当前行情。", "Up to 8 assets, rotating one at a time; hold to expand."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(20).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 26))
@@ -155,7 +155,7 @@ struct ContentView: View {
                     }
                 }
             }
-            Section(tr("最多关注 8 个资产 · 灵动岛每组 2 个", "Follow up to 8 · island shows groups of 2")) {
+            Section(tr("最多关注 8 个资产 · 灵动岛逐个轮播", "Follow up to 8 · island rotates one at a time")) {
                 ForEach(store.catalog.filter {
                     (market == "All" || $0.market == market || ($0.market == "Contracts" && $0.region == market)) &&
                     (search.isEmpty || ($0.id + " " + $0.name).localizedCaseInsensitiveContains(search))

@@ -75,10 +75,10 @@ async def push_due(store, hub, sender, settings, timestamp=None):
         if not all(quotes) or not any(q.fresh(timestamp, settings.stale_after) for q in quotes):
             return
         state = {"quotes": [q.wire() for q in quotes], "redUp": bool(row["red_up"]), "foregroundOnly": False}
-        # Rotate pairs on real push updates, retaining all original timestamps and subscription order.
-        pages = max(1,(len(quotes)+1)//2)
+        # Rotate one instrument on real push updates, preserving original quote timestamps.
+        pages = max(1,len(quotes))
         state["page"] = int(timestamp // settings.push_interval) % pages
-        # Ignore receipt timestamps for change detection; include the visible pair so static prices still rotate.
+        # Include the visible page so static prices still rotate while the feed remains fresh.
         fingerprint = hashlib.sha256(json.dumps([(q.id,q.price,q.change,q.market_state,q.delay_seconds) for q in quotes] + [("page",state["page"])],
                                                   separators=(",", ":")).encode()).hexdigest()
         elapsed = timestamp - row["last_push"]

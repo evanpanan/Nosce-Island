@@ -198,6 +198,7 @@ class Store:
         self.db.execute("DELETE FROM admin_totp WHERE step<?", (int(now()/30)-2,))
         self.db.execute("DELETE FROM audit WHERE created<?", (now()-90*86400,))
         self.db.execute("DELETE FROM runtime_cache WHERE key LIKE ? AND updated<?",("watch:%",now()-90))
+        self.db.execute("DELETE FROM runtime_cache WHERE key LIKE ? AND updated<?",("presence:%",now()-90))
         self.db.execute("DELETE FROM users WHERE apple_hash IS NULL AND id NOT IN (SELECT user_id FROM installs) AND id NOT IN (SELECT user_id FROM orders)")
 
     def put_cache(self,key,payload):

@@ -29,6 +29,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     lazy var commerce = CommerceStore(api:api)
     private var streamTask: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?
+    private var presenceTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var discoveryTask: Task<Void, Never>?
     private var activityTask: Task<Void, Never>?
@@ -59,7 +60,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     var islandQuotes: [IslandQuote] { selected.compactMap { quotes[$0] } }
     var visibleInstruments: [Instrument] {
         let index = observed?.content.state.pageIndex ?? 0
-        return Array(chosen.dropFirst(index * 2).prefix(2))
+        return Array(chosen.dropFirst(index).prefix(1))
     }
     func color(_ change: Double?) -> Color {
         guard let change else { return .secondary }
@@ -74,7 +75,7 @@ func tr(_ chinese: String, _ english: String) -> String {
             guard selected.count > 1 else { return }
             selected.removeAll { $0 == item.id }
         } else {
-            guard selected.count < 8 else { message = tr("最多关注 8 个资产，灵动岛每组显示 2 个。", "Follow up to 8 instruments; the island shows 2 per group."); return }
+            guard selected.count < 8 else { message = tr("最多关注 8 个资产，灵动岛逐个轮播。", "Follow up to 8 instruments; the island rotates one at a time."); return }
             selected.append(item.id)
         }
         UserDefaults.standard.set(selected, forKey: "selectedServerV1")
@@ -86,6 +87,16 @@ func tr(_ chinese: String, _ english: String) -> String {
         syncActivityState()
         scheduleLocalActivityUpdate()
         let generation = self.generation
+        if api.isConfigured {
+            presenceTask = Task { [weak self] in
+                guard let self else { return }
+                while !Task.isCancelled, self.foreground, self.generation == generation {
+                    do { try await self.api.foregroundHeartbeat() }
+                    catch { /* Presence must never interrupt public market data. */ }
+                    do { try await Task.sleep(for: .seconds(30)) } catch { return }
+                }
+            }
+        }
         streamTask = Task { [weak self] in
             guard let self else { return }
             var delay = 1
@@ -173,6 +184,7 @@ func tr(_ chinese: String, _ english: String) -> String {
         streamTask?.cancel(); streamTask = nil
         discoveryTask?.cancel(); discoveryTask = nil; catalogLoading = false
         heartbeat?.cancel(); heartbeat = nil
+        presenceTask?.cancel(); presenceTask = nil
         socket?.cancel(with: .goingAway, reason: nil); socket = nil
         loading = false
         scheduleLocalActivityUpdate()
@@ -362,13 +374,13 @@ func tr(_ chinese: String, _ english: String) -> String {
                     guard let next = self.quotes[old.id], next.updatedAt >= old.updatedAt else { return old }
                     return next
                 }
-                let pageCount = max(1,(current.count + 1) / 2)
+                let pageCount = max(1,current.count)
                 let elapsed = max(0,Int(Date().timeIntervalSince(self.pageOrigin) / 5))
                 let page = self.foreground ? (self.initialPage + elapsed) % pageCount : activity.content.state.pageIndex
                 let state = MarketActivityAttributes.ContentState(quotes:current,redUp:self.redUp,foregroundOnly:true,page:page)
                 let staleDate = self.foreground ? current.map(\.staleAt).max() : Date()
                 await activity.update(ActivityContent(state:state,staleDate:staleDate))
-                if revision == self.localRevision && (!self.foreground || current.count <= 2) { return }
+                if revision == self.localRevision && (!self.foreground || current.count <= 1) { return }
             }
         }
     }

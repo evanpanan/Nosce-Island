@@ -2,5 +2,5 @@
 // Operator/build configuration only. Users never enter or select a server.
 // Set the real HTTPS API origin after deploying the server. No trailing path.
 // Archive is blocked while this placeholder remains; ordinary builds still compile.
-NOSCE_API_BASE_URL = https:/$()/api.nosce.invalid
+NOSCE_API_BASE_URL = https:/$()/nosce-island.vercel.app
 NOSCE_APNS_ENVIRONMENT = production
