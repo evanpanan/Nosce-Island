@@ -61,3 +61,45 @@ enum WidgetSnapshotStore {
         } catch { return false }
     }
 }
+
+/// Separate protected capability: only reads selected stock snapshots; never an Alpaca or installation key.
+struct WidgetStockAccess: Codable {
+    let origin: String
+    let token: String
+    let symbols: [String]
+    let expiresAt: Date
+    var baseURL: URL? {
+        guard let url = URL(string: origin), url.scheme == "https", url.host != nil,
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil,
+              url.path.isEmpty || url.path == "/" else { return nil }
+        return url
+    }
+    func valid(at date: Date = Date()) -> Bool {
+        baseURL != nil && expiresAt > date && !token.isEmpty && token.count < 256 &&
+        !symbols.isEmpty && symbols.count <= 8 && Set(symbols).count == symbols.count &&
+        symbols.allSatisfy { $0.hasPrefix("stock:") && $0.count <= 128 }
+    }
+}
+
+enum WidgetStockAccessStore {
+    private static var url: URL? {
+        WidgetSnapshotStore.fileURL?.deletingLastPathComponent().appendingPathComponent("widget-stock-access-v1.json")
+    }
+    static func read() -> WidgetStockAccess? {
+        guard let url, let data = try? Data(contentsOf: url), data.count < 8192,
+              let value = try? JSONDecoder().decode(WidgetStockAccess.self, from: data), value.valid() else { return nil }
+        return value
+    }
+    @discardableResult static func write(_ value: WidgetStockAccess) -> Bool {
+        guard value.valid(), let url, let data = try? JSONEncoder().encode(value) else { return false }
+        do {
+            #if os(iOS)
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+            #else
+            try data.write(to: url, options: .atomic)
+            #endif
+            return true
+        } catch { return false }
+    }
+    static func clear() { if let url { try? FileManager.default.removeItem(at: url) } }
+}

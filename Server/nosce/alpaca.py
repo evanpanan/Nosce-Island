@@ -78,12 +78,12 @@ class AlpacaFeed:
         for key in ids:
             cached,stamp=self.store.get_cache('alpaca:quote:'+key)
             if cached:values[key]=Quote.model_validate(cached)
-            if not cached or stamp<=now()-15:missing.append(key)
+            if not cached or stamp<=now()-5:missing.append(key)
         if not missing:return [values[key] for key in ids if key in values]
         # One personal user, shared lease across instances; no open fan-out to provider.
         lease=self.store.db.execute("""INSERT INTO runtime_cache(key,payload,updated) VALUES(?,'{}',?)
           ON CONFLICT(key) DO UPDATE SET updated=excluded.updated
-          WHERE runtime_cache.updated<? RETURNING key""",('alpaca:lease',now(),now()-10)).fetchone()
+          WHERE runtime_cache.updated<? RETURNING key""",('alpaca:lease',now(),now()-5)).fetchone()
         if not lease:return [values[key] for key in ids if key in values]
         try:
             snapshots,clock=await asyncio.gather(

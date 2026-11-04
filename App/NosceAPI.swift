@@ -15,7 +15,7 @@ struct CatalogPage: Decodable {
     let nextOffset: Int?
     let stocksEnabled: Bool
 }
-struct StreamFrame: Decodable { let quotes: [IslandQuote] }
+struct StreamFrame: Decodable { let quotes: [IslandQuote]; let refreshAfterSeconds: Int? }
 
 enum ServiceError: LocalizedError {
     case configuration, unavailable(Int), credentials
@@ -149,6 +149,14 @@ enum ServiceError: LocalizedError {
         struct Selection: Encodable { let symbols: [String] }
         return try JSONDecoder().decode(StreamFrame.self, from: await request("v1/quotes", method: "POST",
             body: JSONEncoder().encode(Selection(symbols: symbols))))
+    }
+    func widgetStockAccess(symbols: [String]) async throws -> WidgetStockAccess {
+        struct Selection: Encodable { let symbols: [String] }
+        struct Access: Decodable { let token: String; let symbols: [String]; let expiresAt: Double }
+        let result = try JSONDecoder().decode(Access.self, from: await request("v1/widget-access", method: "POST",
+            body: JSONEncoder().encode(Selection(symbols: symbols))))
+        return WidgetStockAccess(origin: try base.absoluteString, token: result.token, symbols: result.symbols,
+            expiresAt: Date(timeIntervalSince1970: result.expiresAt))
     }
     func socket(symbols: [String]) async throws -> URLSessionWebSocketTask {
         var components = URLComponents(url: try base.appendingPathComponent("v1/stream"), resolvingAgainstBaseURL: false)!

@@ -86,7 +86,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.7.6", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.7.7", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
     app.state.runtime=runtime
@@ -118,7 +118,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
                 return JSONResponse({"detail": "Invalid content length"}, status_code=400)
             # Reverse proxy also enforces a body limit for chunked transfers.
         async with request_database(request.url.path,metrics):
-            configured=request.url.path.startswith(('/readyz','/v1/catalog','/v1/quotes','/v1/sessions','/v1/me','/v1/app-store','/v1/purchases','/admin/api/overview','/admin/api/services'))
+            configured=request.url.path.startswith(('/readyz','/v1/catalog','/v1/quotes','/v1/widget','/v1/sessions','/v1/me','/v1/app-store','/v1/purchases','/admin/api/overview','/admin/api/services'))
             with runtime.bind() if configured else nullcontext():
                 if settings.serverless and request.url.path.startswith(("/readyz","/v1/catalog","/v1/sessions")):
                     load_snapshot()
@@ -206,7 +206,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         if not stocks.exchanges():raise HTTPException(503,"Stock data is not enabled")
         try:quotes=await stocks.quotes(value.symbols)
         except ValueError:raise HTTPException(422,"Unsupported or unlicensed stock symbol")
-        return {"quotes":[quote.wire() for quote in quotes],"serverTime":int(now()),"refreshAfterSeconds":15,
+        return {"quotes":[quote.wire() for quote in quotes],"serverTime":int(now()),"refreshAfterSeconds":5 if settings.alpaca_enabled else 15,
                 "unavailable":[key for key in value.symbols if key not in {quote.id for quote in quotes}]}
 
     @app.post("/v1/sessions")
@@ -283,6 +283,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         finally:
             hub.unwatch(install, connection)
 
+    from .widget_routes import mount_widget_routes
+    mount_widget_routes(app,settings,store,stocks,authenticate,personal_stocks_allowed)
     mount_admin(app,settings,store,hub,billing,runtime)
     mount_commerce(app,settings,store,hub,identity,billing,authenticate)
     return app

@@ -2,7 +2,7 @@ import Foundation
 
 /// A bounded HTTP snapshot, not a background WebSocket or fabricated future price timeline.
 enum WidgetQuoteFetcher {
-    static func fetch(_ items: [WidgetWatchItem], session: URLSession = .shared) async -> [IslandQuote] {
+    static func fetch(_ items: [WidgetWatchItem], session: URLSession = .shared, stockAccess: WidgetStockAccess? = WidgetStockAccessStore.read()) async -> [IslandQuote] {
         let hl = items.filter { $0.id.hasPrefix("hl:") }
         let dexes = Set(hl.map { item -> String in
             let coin = String(item.id.dropFirst(3))
@@ -16,10 +16,28 @@ enum WidgetQuoteFetcher {
                     return []
                 }
             }
+            if let access = stockAccess, access.valid() {
+                group.addTask { await stocks(items, access: access, session: session) }
+            }
             var result: [IslandQuote] = []
             for await batch in group { result += batch }
             return result
         }
+    }
+    private struct StockFrame: Decodable { let quotes: [IslandQuote] }
+    private static func stocks(_ items: [WidgetWatchItem], access: WidgetStockAccess, session: URLSession) async -> [IslandQuote] {
+        let ids = items.map(\.id).filter { access.symbols.contains($0) && $0.hasPrefix("stock:") }
+        guard !ids.isEmpty, let base = access.baseURL else { return [] }
+        do {
+            var request = URLRequest(url: base.appendingPathComponent("v1/widget/quotes"))
+            request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: ["symbols": ids])
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer " + access.token, forHTTPHeaderField: "Authorization")
+            request.cachePolicy = .reloadIgnoringLocalCacheData; request.timeoutInterval = 12
+            let result = try JSONDecoder().decode(StockFrame.self, from: try await data(request, session: session))
+            return result.quotes.filter { ids.contains($0.id) && $0.source == "Alpaca · IEX" }
+        } catch { return [] }
     }
     private static func data(_ request: URLRequest, session: URLSession) async throws -> Data {
         let (data, response) = try await session.data(for: request)

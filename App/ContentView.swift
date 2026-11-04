@@ -243,6 +243,7 @@ struct ContentView: View {
                 LabeledContent(tr("币种", "Currency"), value: tr("按品种 USD / HKD / USDT", "Native USD / HKD / USDT"))
             }
             Section(tr("主屏幕小组件", "Home Screen widgets")) {
+                Text(store.widgetStockStatus).font(.caption).foregroundStyle(.secondary)
                 Label(tr("小号 · 单个自选", "Small · one instrument"), systemImage: "square")
                 Label(tr("中号 · 最多三个自选", "Medium · up to three instruments"), systemImage: "rectangle")
                 Label(tr("大号 · 最多八个自选", "Large · up to eight instruments"), systemImage: "rectangle.portrait")

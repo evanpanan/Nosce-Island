@@ -158,6 +158,9 @@ let configEpoch=0,configBusy=false;
 function closeServiceConfig(){configEpoch++;$('serviceConfig').close();$('serviceConfigBody').replaceChildren();configBusy=false}
 $('closeServiceConfig').onclick=closeServiceConfig;
 $('serviceConfig').addEventListener('cancel',()=>closeServiceConfig());
+let configBackdropDown=false;
+$('serviceConfig').addEventListener('pointerdown',event=>{const r=$('serviceConfig').getBoundingClientRect();configBackdropDown=event.target===$('serviceConfig')&&(event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom)});
+$('serviceConfig').addEventListener('click',event=>{const r=$('serviceConfig').getBoundingClientRect();const outside=event.clientX<r.left||event.clientX>r.right||event.clientY<r.top||event.clientY>r.bottom;if(configBackdropDown&&event.target===$('serviceConfig')&&outside)closeServiceConfig();configBackdropDown=false});
 const configGroups={alpaca:{title:'美股 · Alpaca 个人测试',intro:'填写 Paper 模拟账户的密钥，选择你正在使用的 App 用户。保存后立即生效，无需重新部署。密钥留空保留已保存值；不会回显。',keys:['alpaca_key','alpaca_secret','alpaca_personal_user']},apns:{title:'灵动岛推送 · APNs',intro:'填写 Apple 开发者账号的 Team ID、Key ID 与 .p8 文件内容。Xcode 调试使用 development；正式发行使用 production。保存配置不代表后台任务已运行，实际送达需要真机验证。',keys:['apns_team_id','apns_key_id','apns_key_pem','apns_environment']},apple:{title:'Apple 内购与交易校验',intro:'使用 App Store Connect 服务端 API 密钥，并提供 Apple 根证书 DER 的 Base64。商品 ID 必须与 App Store Connect 一致；完成沙盒验证后再开放购买。',keys:['app_store_issuer','app_store_key_id','app_store_key_pem','app_store_roots_base64','app_store_environment','app_store_app_id','app_store_products','privacy_url','terms_url','sales_enabled']}};
 async function openServiceConfig(group){
  const epoch=++configEpoch;const dialog=$('serviceConfig'),body=$('serviceConfigBody');body.replaceChildren();$('serviceConfigTitle').textContent=configGroups[group]?.title||'后台行情任务';

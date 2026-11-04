@@ -24,6 +24,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     @Published var message: String?
     @Published var loading = false
     @Published var catalogLoading = false
+    @Published var widgetStockStatus = tr("股票小组件权限将在连接后检查", "Stock widget access is checked when connected")
     @Published var stockNotice: String?
     @Published var catalogNotice: String?
     @Published var connection = tr("等待连接", "Waiting")
@@ -39,6 +40,9 @@ func tr(_ chinese: String, _ english: String) -> String {
     private var presenceTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
     private var discoveryTask: Task<Void, Never>?
+    private var widgetAccessTask: Task<Void, Never>?
+    private var widgetAccessID = UUID()
+    private var widgetAccessSymbols: [String] = []
     private var activityTask: Task<Void, Never>?
     private var tokenTask: Task<Void, Never>?
     private var registrationTask: Task<Void, Never>?
@@ -71,10 +75,48 @@ func tr(_ chinese: String, _ english: String) -> String {
         let items = chosen.map { WidgetWatchItem(id: $0.id, symbol: $0.symbol, currency: $0.currency) }
         let snapshot = WidgetSnapshot(items: items, quotes: islandQuotes, redUp: redUp, savedAt: date)
         guard WidgetSnapshotStore.write(snapshot) else { return }
+        refreshWidgetAccess()
         lastWidgetWrite = date
         if force || date.timeIntervalSince(lastWidgetReload) >= 60 {
             lastWidgetReload = date
             WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotStore.kind)
+        }
+    }
+    private func refreshWidgetAccess() {
+        let ids = selected.filter { $0.hasPrefix("stock:") }.sorted()
+        if ids.isEmpty {
+            widgetAccessTask?.cancel(); widgetAccessTask = nil; widgetAccessID = UUID()
+            WidgetStockAccessStore.clear()
+            widgetStockStatus = tr("未选择股票", "No stocks selected")
+            return
+        }
+        guard foreground else { return }
+        if let saved = WidgetStockAccessStore.read(), Set(saved.symbols) == Set(ids),
+           saved.expiresAt > Date().addingTimeInterval(86400) {
+            widgetStockStatus = tr("股票小组件可独立检查报价，刷新由 iOS 调度", "Stock widgets can check quotes independently; iOS schedules refreshes")
+            return
+        }
+        if widgetAccessTask != nil && widgetAccessSymbols == ids { return }
+        widgetAccessTask?.cancel()
+        let job = UUID(); widgetAccessID = job; widgetAccessSymbols = ids
+        widgetAccessTask = Task { [weak self] in
+            guard let self else { return }
+            defer { if self.widgetAccessID == job { self.widgetAccessTask = nil } }
+            do {
+                let access = try await self.api.widgetStockAccess(symbols: ids)
+                guard !Task.isCancelled, self.widgetAccessID == job,
+                      self.selected.filter({ $0.hasPrefix("stock:") }).sorted() == ids else { return }
+                guard WidgetStockAccessStore.write(access) else {
+                    self.widgetStockStatus = tr("小组件共享空间不可用，请检查 App Group 签名配置", "Widget storage unavailable; check App Group signing")
+                    return
+                }
+                self.widgetStockStatus = tr("股票小组件刷新权限已就绪，刷新由 iOS 调度", "Stock widget refresh access is ready; iOS schedules updates")
+                WidgetCenter.shared.reloadTimelines(ofKind: WidgetSnapshotStore.kind)
+            } catch {
+                if !Task.isCancelled && self.widgetAccessID == job {
+                    self.widgetStockStatus = tr("小组件未取得股票刷新权限，暂时使用 App 快照", "Stock widget access unavailable; using the app snapshot")
+                }
+            }
         }
     }
     var chosen: [Instrument] { selected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
@@ -105,6 +147,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     func startRefreshing() {
         stopRefreshing()
         foreground = true
+        refreshWidgetAccess()
         syncActivityState()
         scheduleLocalActivityUpdate()
         let generation = self.generation
@@ -164,7 +207,7 @@ func tr(_ chinese: String, _ english: String) -> String {
                         }
                         self.connection = tr("股票 HTTP 行情 · 15 秒查询", "Stock HTTP snapshots · 15s polling")
                         self.loading = false; delay = 1
-                        try await Task.sleep(for: .seconds(15))
+                        try await Task.sleep(for: .seconds(max(5, min(30, frame.refreshAfterSeconds ?? 15))))
                     }
 
                 } catch {
@@ -440,6 +483,8 @@ func tr(_ chinese: String, _ english: String) -> String {
         await endActivity()
         do {
             try await api.deleteInstallation()
+            widgetAccessTask?.cancel(); widgetAccessID = UUID(); widgetAccessTask = nil
+            WidgetStockAccessStore.clear()
             commerce.clearLocalProfile()
             stopRefreshing(); quotes = [:]; history = [:]
             message = tr("设备服务数据已删除。重新连接会生成新的匿名设备凭证。", "Device service data deleted. Reconnecting creates new anonymous credentials.")

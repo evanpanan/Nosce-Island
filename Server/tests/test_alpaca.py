@@ -46,6 +46,7 @@ def test_personal_iex_is_private_real_catalog_batched_cached_and_source_labelled
         catalog=c.get('/v1/catalog',headers=h).json()['instruments']
         assert len(catalog)==1 and catalog[0]['provider']=='alpaca' and catalog[0]['market']=='US'
         result=c.post('/v1/quotes',headers=h,json=ids)
+        assert result.json()['refreshAfterSeconds']==5
         q=result.json()['quotes'][0]
         assert q['price']==100 and q['change']==25 and q['source']=='Alpaca · IEX'
         assert q['basis']=='last' and q['currency']=='USD' and q['delaySeconds']==0
