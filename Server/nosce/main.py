@@ -82,7 +82,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.7.2", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.7.3", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
 
@@ -123,6 +123,11 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
         if not store.limit("install:" + install, 120):
             raise HTTPException(429, "Request rate exceeded", headers={"Retry-After": "60"})
         return install
+
+    def personal_stocks_allowed(install):
+        if not settings.alpaca_enabled:return True
+        user=store.user(install)
+        return bool(user and secrets.compare_digest(user["id"],settings.alpaca_personal_user))
 
     def validate_symbols(symbols):
         if not 1 <= len(symbols) <= 8 or len(set(symbols)) != len(symbols):
@@ -167,18 +172,21 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
     @app.get("/v1/catalog")
     async def catalog(authorization: str | None = Header(default=None),
                       offset: int = Query(default=0, ge=0), limit: int = Query(default=5000, ge=1, le=5000)):
-        authenticate(authorization)
-        stock_items=await stocks.catalog()
+        install=authenticate(authorization)
+        allowed=personal_stocks_allowed(install)
+        stock_items=await stocks.catalog() if allowed else {}
         available={key:value for key,value in hub.catalog.items() if not key.startswith("stock:") or stocks.allowed(value)}
+        if not allowed:available={key:value for key,value in available.items() if not key.startswith("stock:")}
         available.update(stock_items)
         items = sorted(available.values(), key=lambda x: (x.id != "hl:BTC", x.id))
         return {"instruments": [x.public() for x in items[offset:offset+limit]],
                 "nextOffset": offset+limit if offset+limit < len(items) else None,
-                "stocksEnabled": settings.stocks_enabled}
+                "stocksEnabled": settings.stocks_enabled and allowed}
 
     @app.post("/v1/quotes")
     async def stock_snapshots(value: StockQuoteRequest, authorization: str | None = Header(default=None)):
-        authenticate(authorization)
+        install=authenticate(authorization)
+        if not personal_stocks_allowed(install):raise HTTPException(403,"Stock data is restricted to the personal test user")
         if not stocks.exchanges():raise HTTPException(503,"Stock data is not enabled")
         try:quotes=await stocks.quotes(value.symbols)
         except ValueError:raise HTTPException(422,"Unsupported or unlicensed stock symbol")
@@ -192,6 +200,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             raise HTTPException(503, "Background delivery worker is not ready")
         if value.environment != settings.apns_environment:
             raise HTTPException(422, "APNs environment does not match this server")
+        if settings.alpaca_enabled and any(key.startswith("stock:") for key in value.symbols):
+            raise HTTPException(422,"Personal IEX testing supports foreground updates only")
         validate_symbols(value.symbols)
         other_symbols = {key for row in store.sessions() if row["install"] != install for key in json.loads(row["symbols"])}
         watched = {key for owner, (ids, _, _) in hub.watches.items() if owner != install for key in ids}
@@ -225,6 +235,8 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             load_snapshot()
             install = authenticate(socket.headers.get("authorization"))
             ids = symbols.split(",")
+            if settings.alpaca_enabled and any(key.startswith("stock:") for key in ids):
+                raise HTTPException(403,"Use the private personal snapshot endpoint")
             validate_symbols(ids)
         except HTTPException:
             await socket.close(code=1008)

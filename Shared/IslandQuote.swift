@@ -65,7 +65,7 @@ extension IslandQuote {
               ["USD", "HKD", "USDT"].contains(currency), ["mark", "last"].contains(basis),
               ["open", "closed", "unknown"].contains(marketState), (0...86400).contains(delaySeconds),
               (id.hasPrefix("hl:") && source == "Hyperliquid" && basis == "mark" && currency == "USD") ||
-              (id.hasPrefix("stock:") && source.hasPrefix("Twelve Data · ") && basis == "last") ||
+              (id.hasPrefix("stock:") && (source.hasPrefix("Twelve Data · ") || (source == "Alpaca · IEX" && currency == "USD" && delaySeconds == 0)) && basis == "last") ||
               (id.hasPrefix("bn:") && source == "Binance Futures" && basis == "mark") else {
             throw DecodingError.dataCorruptedError(forKey: .price, in: values, debugDescription: "Invalid market quote")
         }

@@ -142,7 +142,6 @@ struct ContentView: View {
                     Text(tr("加密", "Crypto")).tag("Crypto")
                     Text(tr("合约", "Perps")).tag("Contracts")
                     Text(tr("美股", "US")).tag("US")
-                    Text(tr("港股", "HK")).tag("HK")
                 }.pickerStyle(.segmented)
             }
             Section {
@@ -205,12 +204,22 @@ struct ContentView: View {
                 Text(tr("小组件由 iOS 调度刷新，显示报价时间与过期状态，不保证逐秒更新。", "iOS schedules widget refreshes. Quote times and stale status are shown; updates are not guaranteed every second."))
                     .font(.caption).foregroundStyle(.secondary)
             }
+            Section(tr("个人美股测试", "Personal US stock testing")) {
+                if let user = commerce.profile?.userId {
+                    Text(user).font(.caption.monospaced()).textSelection(.enabled)
+                    ShareLink(item: user) { Label(tr("分享测试用户编号", "Share test user ID"), systemImage: "square.and.arrow.up") }
+                } else {
+                    Button(tr("获取测试用户编号", "Load test user ID")) { Task { await commerce.refresh() } }
+                }
+                Text(tr("Alpaca 免费 IEX 仅供指定用户个人测试；是单一交易所报价，可能与全市场价格不同。退出 App 后不保证继续更新，股票小组件读取 App 保存的报价。", "Free Alpaca IEX is restricted to personal testing. Single-exchange prices can differ from consolidated prices. Updates are not guaranteed after leaving the app; stock widgets use quotes saved by the app."))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section(tr("数据管理", "Data management")) {
                 Button(tr("删除设备服务数据", "Delete device service data"), role: .destructive) { Task { await store.deleteServiceData() } }
             }
             Section {
                 Text("Nosce Island · " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.0")).font(.subheadline.bold())
-                Text(tr("合约：币安 / Hyperliquid 标记价，无同口径参考价时不显示涨跌幅。独立股票：Twelve Data 报价与前收盘涨跌。币安和股票保留上游报价时间；Hyperliquid 显示服务器接收时间。", "Perpetuals: Binance / Hyperliquid mark prices; change is unavailable without a matching reference. Exchange stocks: Twelve Data quotes and change from previous close. Binance and stocks preserve upstream timestamps; Hyperliquid uses server receipt time."))
+                Text(tr("合约：币安 / Hyperliquid 标记价，无同口径参考价时不显示涨跌幅。独立股票：按标注的数据源展示；Alpaca IEX 涨跌以 IEX 前一交易日日线收盘价为参考。币安和股票保留上游报价时间；Hyperliquid 显示服务器接收时间。", "Perpetuals: Binance / Hyperliquid mark prices; change is unavailable without a matching reference. Stocks use the labelled source; Alpaca IEX changes use the previous IEX daily close. Binance and stocks preserve upstream timestamps; Hyperliquid uses server receipt time."))
                     .font(.caption).foregroundStyle(.secondary)
             }
         }.navigationTitle(tr("设置", "Settings"))

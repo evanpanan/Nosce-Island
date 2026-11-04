@@ -18,7 +18,7 @@ class Instrument(BaseModel):
     name: str
     market: Literal["Crypto", "Contracts", "US", "HK"]
     currency: Literal["USD", "HKD", "USDT"]
-    provider: Literal["hyperliquid", "twelvedata", "binance"]
+    provider: Literal["hyperliquid", "twelvedata", "binance", "alpaca"]
     provider_symbol: str
     exchange: str = ""
     delay_seconds: int = 0

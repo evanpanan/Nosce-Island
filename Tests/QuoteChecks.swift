@@ -29,6 +29,17 @@ import Foundation
             fatalError("Legacy synthetic content must not decode as genuine data")
         } catch is DecodingError { }
         object.removeValue(forKey: "demo")
+        var iex = object
+        iex["id"] = "stock:NASDAQ:AAPL"; iex["symbol"] = "AAPL"
+        iex["source"] = "Alpaca · IEX"; iex["basis"] = "last"
+        iex["delaySeconds"] = 0
+        let stock = try JSONDecoder().decode(IslandQuote.self, from: JSONSerialization.data(withJSONObject: iex))
+        precondition(stock.source == "Alpaca · IEX" && stock.currency == "USD")
+        iex["currency"] = "HKD"
+        do {
+            _ = try JSONDecoder().decode(IslandQuote.self, from: JSONSerialization.data(withJSONObject: iex))
+            fatalError("IEX must not decode as HK stock data")
+        } catch is DecodingError { }
         object["price"] = -1
         do {
             _ = try JSONDecoder().decode(IslandQuote.self, from: JSONSerialization.data(withJSONObject: object))

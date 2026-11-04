@@ -11,6 +11,8 @@ class StockService:
         self.settings,self.store,self.hub=settings,store,hub
 
     def exchanges(self):
+        if self.settings.alpaca_enabled:
+            return [(exchange,'US','USD',0) for exchange in ('NASDAQ','NYSE','AMEX','ARCA','NYSEARCA','BATS')]
         if not self.settings.stocks_enabled:return []
         result=[]
         if self.settings.td_us_delay>=0:
@@ -19,10 +21,15 @@ class StockService:
         return result
 
     def allowed(self,item):
+        if self.settings.alpaca_enabled:
+            return item.provider=='alpaca' and item.market=='US' and item.currency=='USD' and item.delay_seconds==0 and item.exchange in {x[0] for x in self.exchanges()}
         return any(item.exchange==exchange and item.market==market and item.currency==currency and item.delay_seconds==delay
                    for exchange,market,currency,delay in self.exchanges()) and item.provider=='twelvedata'
 
     async def catalog(self):
+        if self.settings.alpaca_enabled:
+            from .alpaca import AlpacaFeed
+            return await AlpacaFeed(self.settings,self.store,self.hub.client).catalog()
         async def exchange_items(exchange,market,currency,delay):
             key='stocks:catalog:'+exchange
             saved,stamp=self.store.get_cache(key)
@@ -46,6 +53,9 @@ class StockService:
         return {item.id:item for batch in batches for item in batch if self.allowed(item)}
 
     async def quotes(self,ids):
+        if self.settings.alpaca_enabled:
+            from .alpaca import AlpacaFeed
+            return await AlpacaFeed(self.settings,self.store,self.hub.client).quotes(ids)
         catalog={key:item for key,item in self.hub.catalog.items() if self.allowed(item)}
         missing=[key for key in ids if key not in catalog]
         if missing:catalog.update(await self.catalog())

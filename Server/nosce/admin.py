@@ -65,7 +65,7 @@ def mount_admin(app, settings, store, hub, billing):
 
     @app.get("/admin/api/config")
     def login_config():
-        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.7.2"}
+        return {"configured":bool(settings.admin_password_hash),"requiresTotp":bool(settings.admin_totp_secret),"version":"0.7.3"}
 
     @app.get("/admin",response_class=HTMLResponse)
     def page():
@@ -149,9 +149,9 @@ def mount_admin(app, settings, store, hub, billing):
             "instruments":len(json.loads(catalog['payload'])) if settings.serverless and catalog else (0 if settings.serverless else len(hub.catalog)),
             "apnsConfigured":settings.apns_configured,"verifierConfigured":billing.verifier.enabled,
             "runtime":"vercel" if settings.serverless else "server",
-            "stockFeeds":{market:{"configured":bool(settings.td_key),"licensed":settings.td_display_rights,
+            "stockFeeds":({"US":{"provider":"Alpaca · IEX","personal":True,"configured":bool(settings.alpaca_key and settings.alpaca_secret),"licensed":False,"enabled":True,"delaySeconds":0},"HK":{"provider":"暂停","personal":False,"configured":False,"licensed":False,"enabled":False,"delaySeconds":-1}} if settings.alpaca_enabled else {market:{"configured":bool(settings.td_key),"licensed":settings.td_display_rights,
                 "enabled":bool(settings.stocks_enabled and delay>=0),"delaySeconds":delay}
-                for market,delay in [("US",settings.td_us_delay),("HK",settings.td_hk_delay)]},
+                for market,delay in [("US",settings.td_us_delay),("HK",settings.td_hk_delay)]}),
             "workerOnline":bool(heartbeat and heartbeat['updated']>timestamp-45),"database":"PostgreSQL" if store.is_postgres else "SQLite"}
 
     @app.get("/admin/api/activities")

@@ -158,7 +158,7 @@ class MarketHub:
                     except Exception:
                         failures += 1
                     await asyncio.sleep(0.3)
-                if self.settings.stocks_enabled:
+                if self.settings.stocks_enabled and not self.settings.alpaca_enabled:
                     for exchange, market, currency, delay in [
                         ("NASDAQ", "US", "USD", self.settings.td_us_delay),
                         ("NYSE", "US", "USD", self.settings.td_us_delay),
@@ -256,7 +256,7 @@ class MarketHub:
     async def stock_loop(self):
         polled = {}
         while True:
-            if not self.settings.stocks_enabled:
+            if not self.settings.stocks_enabled or self.settings.alpaca_enabled:
                 await asyncio.sleep(5)
                 continue
             keys = sorted(key for key in self.selected() if key in self.catalog and self.catalog[key].provider == "twelvedata")
@@ -285,7 +285,7 @@ class MarketHub:
         backoff = 1
         while True:
             ids = {key for key in self.selected() if key in self.catalog and self.catalog[key].provider == "twelvedata"}
-            if not self.settings.stocks_enabled or not self.settings.td_websocket or not ids:
+            if not self.settings.stocks_enabled or self.settings.alpaca_enabled or not self.settings.td_websocket or not ids:
                 await asyncio.sleep(1)
                 continue
             try:

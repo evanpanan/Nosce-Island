@@ -39,6 +39,9 @@ class Settings:
     max_sessions: int = 10000
     max_symbols: int = 64
     registration_limit: int = 20
+    alpaca_key: str = ""
+    alpaca_secret: str = ""
+    alpaca_personal_user: str = ""
     td_key: str = ""
     td_display_rights: bool = False
     td_websocket: bool = False
@@ -89,6 +92,9 @@ class Settings:
             push_interval=int(os.getenv("PUSH_INTERVAL_SECONDS", "15")),
             max_sessions=int(os.getenv("MAX_SESSIONS", "10000")),
             max_symbols=int(os.getenv("MAX_ACTIVE_SYMBOLS", "64")),
+            alpaca_key=os.getenv("ALPACA_API_KEY_ID", "").strip(),
+            alpaca_secret=os.getenv("ALPACA_API_SECRET_KEY", "").strip(),
+            alpaca_personal_user=os.getenv("ALPACA_PERSONAL_USER_ID", "").strip(),
             td_key=os.getenv("TWELVE_DATA_API_KEY", ""),
             td_display_rights=os.getenv("TWELVE_DATA_EXTERNAL_DISPLAY_LICENSED") == "true",
             td_websocket=os.getenv("TWELVE_DATA_WEBSOCKET_ENABLED") == "true",
@@ -120,8 +126,12 @@ class Settings:
         return bool(self.apns_team_id and self.apns_key_id and (self.apns_key_pem or (self.apns_key_file and Path(self.apns_key_file).is_file())))
 
     @property
+    def alpaca_enabled(self):
+        return bool(self.alpaca_key and self.alpaca_secret and self.alpaca_personal_user)
+
+    @property
     def stocks_enabled(self):
-        return bool(self.td_key and self.td_display_rights)
+        return self.alpaca_enabled or bool(self.td_key and self.td_display_rights)
 
     @property
     def signin_enabled(self):
