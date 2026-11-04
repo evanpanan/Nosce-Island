@@ -79,7 +79,7 @@ def create_app(settings=None, injected_store=None, injected_hub=None, injected_s
             await identity.close()
             store.close()
 
-    app = FastAPI(title="Nosce Island", version="0.6.5", lifespan=lifespan,
+    app = FastAPI(title="Nosce Island", version="0.6.6", lifespan=lifespan,
                   docs_url=None, redoc_url=None)
     app.state.store, app.state.hub, app.state.sender = store, hub, sender
 
