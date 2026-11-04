@@ -1,5 +1,10 @@
 name: Nosce checks
 on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+concurrency:
+  group: nosce-checks-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   server:
     runs-on: ubuntu-latest
@@ -13,6 +18,7 @@ jobs:
         working-directory: Server
   ios:
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - run: bash Tests/run-wire-checks.sh

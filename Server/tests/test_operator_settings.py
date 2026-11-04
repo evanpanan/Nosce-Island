@@ -39,6 +39,9 @@ def test_saved_config_is_encrypted_private_revisioned_and_effective_without_rede
         assert c.post('/admin/api/services/config',json={'revision':0,'values':values}).status_code==403
         saved=c.post('/admin/api/services/config',headers=csrf,json={'revision':0,'values':values});assert saved.status_code==200
         revision=saved.json()['revision']
+        assert 'operator-secret' not in saved.text and 'operator-key' not in saved.text
+        assert saved.json()['fields']['alpaca_secret']['configured']
+        assert saved.json()['fields']['alpaca_secret']['source']=='后台保存'
         raw=store.db.execute('SELECT payload FROM runtime_cache WHERE key=?',(KEY,)).fetchone()[0]
         assert 'operator-secret' not in raw and 'operator-key' not in raw
         described=c.get('/admin/api/services/config');assert 'operator-secret' not in described.text and 'operator-key' not in described.text

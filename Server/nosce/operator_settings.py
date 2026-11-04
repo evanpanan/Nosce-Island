@@ -113,4 +113,4 @@ class RuntimeSettings:
           WHERE runtime_cache.updated=? RETURNING key''',(KEY,json.dumps({'sealed':sealed}),stamp,current)).fetchone()
         if not row:raise ConfigConflict('配置已被更新，请重新打开后再保存')
         self.store.db.execute("INSERT INTO audit(action,created) VALUES('operator.settings.updated',?)",(now(),))
-        return {'ok':True,'revision':stamp}
+        return {'ok':True,**self.describe()}

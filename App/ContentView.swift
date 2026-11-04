@@ -134,55 +134,101 @@ struct ContentView: View {
             } else if store.loading { ProgressView().controlSize(.small) } else { Text(tr("暂时没有有效报价，正在重连。", "No valid quote yet. Reconnecting.")).font(.caption).foregroundStyle(.secondary) }
         }.padding(18).background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 20))
     }
+    // Keep each section independently type-checked; the catalog can contain thousands of assets.
     private var instruments: some View {
         List {
-            Section {
-                Picker(tr("市场", "Market"), selection: $market) {
-                    Text(tr("全部", "All")).tag("All")
-                    Text(tr("加密", "Crypto")).tag("Crypto")
-                    Text(tr("合约", "Perps")).tag("Contracts")
-                    Text(tr("美股", "US")).tag("US")
-                }.pickerStyle(.segmented)
-            }
-            Section {
-                Text(tr("直接搜索并添加想看的资产。名称下方标明报价类型与来源。", "Search and add an asset. The quote type and source appear below its name."))
+            marketPickerSection
+            catalogStatusSection
+            selectedAssetsSection
+            availableAssetsSection
+        }
+        .navigationTitle(tr("自选行情", "Watchlist"))
+        .searchable(text: $search, prompt: tr("搜索代码或英文名称", "Symbol or name"))
+    }
+    private var marketPickerSection: some View {
+        Section {
+            Picker(tr("市场", "Market"), selection: $market) {
+                Text(tr("全部", "All")).tag("All")
+                Text(tr("加密", "Crypto")).tag("Crypto")
+                Text(tr("合约", "Perps")).tag("Contracts")
+                Text(tr("美股", "US")).tag("US")
+            }.pickerStyle(.segmented)
+        }
+    }
+    private var stockMarketIsEmpty: Bool {
+        guard market == "US", store.stockNotice == nil else { return false }
+        return !store.catalog.contains { $0.market == market }
+    }
+    private var catalogStatusSection: some View {
+        Section {
+            Text(tr("直接搜索并添加想看的资产。名称下方标明报价类型与来源。", "Search and add an asset. The quote type and source appear below its name."))
+                .font(.caption).foregroundStyle(.secondary)
+            if store.catalogLoading { ProgressView(tr("正在加载市场…", "Loading markets…")) }
+            if let notice = store.catalogNotice { Text(notice).font(.caption).foregroundStyle(.orange) }
+            if market == "US", let notice = store.stockNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
+            if stockMarketIsEmpty {
+                Text(tr("该市场的股票数据尚未开放；合约报价不作为股票报价展示。", "Stock data for this market is not available yet. Contract prices are not exchange stock quotes."))
                     .font(.caption).foregroundStyle(.secondary)
-                if store.catalogLoading { ProgressView(tr("正在加载市场…", "Loading markets…")) }
-                if let notice = store.catalogNotice { Text(notice).font(.caption).foregroundStyle(.orange) }
-                if market == "US", let notice = store.stockNotice { Text(notice).font(.caption).foregroundStyle(.secondary) }
-                if store.stockNotice == nil, ["US", "HK"].contains(market), !store.catalog.contains(where: { $0.market == market }) {
-                    Text(tr("该市场的股票数据尚未开放；合约报价不作为股票报价展示。", "Stock data for this market is not available yet. Contract prices are not exchange stock quotes."))
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-                Button(tr("刷新市场列表", "Reload markets")) { store.reloadCatalog() }.disabled(store.catalogLoading)
             }
-            Section(tr("已选择 · 点按移除", "Selected · tap to remove")) {
-                ForEach(store.chosen) { item in
-                    Button { store.toggle(item) } label: {
-                        HStack { Text(item.id); Spacer(); Image(systemName: "minus.circle") }
-                    }
+            Button(tr("刷新市场列表", "Reload markets")) { store.reloadCatalog() }
+                .disabled(store.catalogLoading)
+        }
+    }
+    private var selectedAssetsSection: some View {
+        Section(tr("已选择 · 点按移除", "Selected · tap to remove")) {
+            ForEach(store.chosen) { item in
+                Button { store.toggle(item) } label: {
+                    HStack { Text(item.id); Spacer(); Image(systemName: "minus.circle") }
                 }
             }
-            Section(tr("最多关注 8 个资产 · 灵动岛逐个轮播", "Follow up to 8 · island rotates one at a time")) {
-                ForEach(store.catalog.filter {
-                    (market == "All" || $0.market == market) &&
-                    (search.isEmpty || ($0.id + " " + $0.name).localizedCaseInsensitiveContains(search))
-                }) { item in
-                    Button { store.toggle(item) } label: {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(item.symbol).font(.headline).foregroundStyle(.primary)
-                                Text(item.name + " · " + item.typeLabel + (item.exchange.isEmpty ? "" : " · " + item.exchange))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: store.selected.contains(item.id) ? "checkmark.circle.fill" : "plus.circle")
-                        }.padding(.vertical, 6)
-                    }.accessibilityLabel(item.symbol + (store.selected.contains(item.id) ? tr(" 已选择", " selected") : tr(" 添加", " add")))
-                }
+        }
+    }
+    private var matchingAssets: [Instrument] {
+        store.catalog.filter { item in
+            guard market == "All" || item.market == market else { return false }
+            guard !search.isEmpty else { return true }
+            let terms = [item.id, item.symbol, item.name].joined(separator: " ")
+            return terms.localizedCaseInsensitiveContains(search)
+        }
+    }
+    private var availableAssetsSection: some View {
+        let matches = matchingAssets
+        return Section(tr("最多关注 8 个资产 · 灵动岛逐个轮播", "Follow up to 8 · island rotates one at a time")) {
+            if matches.isEmpty {
+                emptySearchHint
+            } else {
+                ForEach(matches) { item in assetSelectionButton(item) }
             }
-        }.navigationTitle(tr("自选行情", "Watchlist"))
-            .searchable(text: $search, prompt: tr("搜索代码或英文名称", "Symbol or name"))
+        }
+    }
+    private var emptySearchHint: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(tr("当前市场没有匹配结果。美股请切换到美股市场，使用股票代码，例如 AAPL、TSLA、NVDA。", "No matches in this market. For US stocks, select US and search a ticker such as AAPL, TSLA or NVDA."))
+                .font(.caption).foregroundStyle(.secondary)
+            if market != "US" {
+                Button(tr("查看美股列表", "Browse US stocks")) { market = "US"; search = "" }
+            }
+            Button(tr("清除搜索并查看全部", "Clear search and show all")) { market = "All"; search = "" }
+        }
+    }
+    private func assetDescription(_ item: Instrument) -> String {
+        let parts = [item.name, item.typeLabel, item.exchange]
+        return parts.filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+    private func assetSelectionButton(_ item: Instrument) -> some View {
+        let selected = store.selected.contains(item.id)
+        let selectionText = selected ? tr(" 已选择", " selected") : tr(" 添加", " add")
+        return Button { store.toggle(item) } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(item.symbol).font(.headline).foregroundStyle(.primary)
+                    Text(assetDescription(item)).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: selected ? "checkmark.circle.fill" : "plus.circle")
+            }.padding(.vertical, 6)
+        }
+        .accessibilityLabel(Text(item.symbol + selectionText))
     }
     private var settings: some View {
         Form {
