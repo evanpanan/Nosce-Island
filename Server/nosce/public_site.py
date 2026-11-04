@@ -5,9 +5,9 @@ from fastapi import HTTPException
 from fastapi.responses import FileResponse
 
 PUBLIC = Path(__file__).with_name('public')
-ASSETS = {'site.css': 'text/css', 'site.js': 'text/javascript', 'mark.svg': 'image/svg+xml'}
+ASSETS = {'site.css': 'text/css', 'site.js': 'text/javascript', 'market-feed.js': 'text/javascript', 'mark.svg': 'image/svg+xml'}
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
-       "connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+       "connect-src 'self' https://api.hyperliquid.xyz wss://api.hyperliquid.xyz; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
 
 
 def public_url(value):
