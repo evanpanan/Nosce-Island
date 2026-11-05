@@ -30,6 +30,13 @@ final class WidgetFixtureProtocol: URLProtocol {
 
 @main struct WidgetChecks {
     static func main() async throws {
+        let order = ["BTC", "ETH", "SOL", "SAVED"]
+        precondition(WatchlistOrder.moving(order, from: IndexSet(integer: 0), to: 3) == ["ETH", "SOL", "BTC", "SAVED"])
+        precondition(WatchlistOrder.moving(order, from: IndexSet(integer: 2), to: 0) == ["SOL", "BTC", "ETH", "SAVED"])
+        precondition(WatchlistOrder.moving(order, from: IndexSet([0, 2]), to: 4) == ["ETH", "SAVED", "BTC", "SOL"])
+        precondition(WatchlistOrder.moving(order, from: IndexSet(integer: 1), to: 2) == order)
+        precondition(WatchlistOrder.moving(order, from: IndexSet(integer: 8), to: 0) == order)
+        precondition(WatchlistOrder.moving(order, from: IndexSet(integer: 1), to: 8) == order)
         let now = Date()
         precondition(MembershipAccess(expiresAt: nil, at: now).watchlistLimit == 3)
         precondition(MembershipAccess(expiresAt: now.addingTimeInterval(60), at: now).islandLimit == 8)

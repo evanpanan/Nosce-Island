@@ -215,6 +215,29 @@ func tr(_ chinese: String, _ english: String) -> String {
         syncWidgets(force: true)
         if foreground { startRefreshing() }
     }
+    func moveSelected(from offsets: IndexSet, to destination: Int) {
+        guard !activityStarting else { return }
+        let next = WatchlistOrder.moving(selected, from: offsets, to: destination)
+        guard next != selected else { return }
+        let before = Set(activeSelected)
+        let after = Set(next.prefix(watchlistLimit))
+        // Reordering active assets is safe; replacing an active asset needs a new watch session.
+        guard !activityRunning || before == after else {
+            message = tr("请先结束盯盘，再将保留的资产移入前三位。", "Stop watching before moving a saved asset into the first three positions.")
+            return
+        }
+        selected = next
+        UserDefaults.standard.set(next, forKey: "selectedServerV1")
+        pageOrigin = Date(); initialPage = 0
+        syncWidgets(force: true)
+        if before != after, foreground { startRefreshing() }
+        Task { await updateActivity() }
+    }
+    func moveSelected(_ id: String, before target: String) {
+        guard let source = selected.firstIndex(of: id), let targetIndex = selected.firstIndex(of: target), source != targetIndex else { return }
+        // Dropping on a card swaps past it in the direction of travel.
+        moveSelected(from: IndexSet(integer: source), to: source < targetIndex ? targetIndex + 1 : targetIndex)
+    }
     func startRefreshing() {
         stopRefreshing()
         foreground = true
@@ -442,7 +465,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     private func register(activity: Activity<MarketActivityAttributes>, token: Data, lifecycle: UUID) {
         guard !activity.content.state.foregroundOnly else { return }
         registrationTask?.cancel()
-        let symbols = activity.content.state.quotes.map(\.id)
+        let symbols = activityIDs
         registrationTask = Task { [weak self] in
             guard let self else { return }
             var delay = 1
@@ -524,9 +547,10 @@ func tr(_ chinese: String, _ english: String) -> String {
                 guard !Task.isCancelled, self.observed?.id == activity.id else { return }
                 let revision = self.localRevision
                 let previous = activity.content.state.quotes
-                let allowed = Set(self.activityIDs)
-                let current = previous.filter { allowed.contains($0.id) }.map { old in
-                    guard let next = self.quotes[old.id], next.updatedAt >= old.updatedAt else { return old }
+                let current = self.activityIDs.compactMap { id -> IslandQuote? in
+                    let old = previous.first { $0.id == id }
+                    guard let next = self.quotes[id] else { return old }
+                    if let old, old.updatedAt > next.updatedAt { return old }
                     return next
                 }
                 let pageCount = max(1,current.count)

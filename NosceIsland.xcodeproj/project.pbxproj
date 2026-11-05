@@ -149,8 +149,8 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"CODE_SIGN_ENTITLEMENTS" = "App/NosceIsland.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "21";
-				"MARKETING_VERSION" = "0.8.0";
+				"CURRENT_PROJECT_VERSION" = "22";
+				"MARKETING_VERSION" = "0.8.1";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
@@ -175,8 +175,8 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"CODE_SIGN_ENTITLEMENTS" = "App/NosceIsland.entitlements";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "21";
-				"MARKETING_VERSION" = "0.8.0";
+				"CURRENT_PROJECT_VERSION" = "22";
+				"MARKETING_VERSION" = "0.8.1";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"ASSETCATALOG_COMPILER_APPICON_NAME" = "AppIcon";
@@ -205,8 +205,8 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"CODE_SIGN_ENTITLEMENTS" = "LiveActivity/NosceWidgets.entitlements";
-				"CURRENT_PROJECT_VERSION" = "21";
-				"MARKETING_VERSION" = "0.8.0";
+				"CURRENT_PROJECT_VERSION" = "22";
+				"MARKETING_VERSION" = "0.8.1";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.cooper.nosceisland.live";
@@ -232,8 +232,8 @@
 				"TARGETED_DEVICE_FAMILY" = "1";
 				"CODE_SIGN_STYLE" = "Automatic";
 				"CODE_SIGN_ENTITLEMENTS" = "LiveActivity/NosceWidgets.entitlements";
-				"CURRENT_PROJECT_VERSION" = "21";
-				"MARKETING_VERSION" = "0.8.0";
+				"CURRENT_PROJECT_VERSION" = "22";
+				"MARKETING_VERSION" = "0.8.1";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
 				"PRODUCT_BUNDLE_IDENTIFIER" = "com.cooper.nosceisland.live";

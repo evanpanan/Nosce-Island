@@ -147,3 +147,16 @@ enum WidgetEntitlementAccessStore {
     }
     static func clear() { if let url { try? FileManager.default.removeItem(at: url) } }
 }
+
+// Foundation-only so order semantics can be checked without the UI runtime.
+enum WatchlistOrder {
+    static func moving(_ ids: [String], from offsets: IndexSet, to destination: Int) -> [String] {
+        guard !offsets.isEmpty, offsets.allSatisfy({ ids.indices.contains($0) }),
+              (0...ids.count).contains(destination) else { return ids }
+        let moved = offsets.sorted().map { ids[$0] }
+        var result = ids.enumerated().filter { !offsets.contains($0.offset) }.map(\.element)
+        let insertion = destination - offsets.filter { $0 < destination }.count
+        result.insert(contentsOf: moved, at: insertion)
+        return result
+    }
+}
