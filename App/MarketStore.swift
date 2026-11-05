@@ -342,6 +342,10 @@ func tr(_ chinese: String, _ english: String) -> String {
         syncWidgets(force: true)
         // Preserve real quote expiry on background; entering Home is not a stale market event.
     }
+    func refreshCatalog() async {
+        reloadCatalog()
+        await discoveryTask?.value
+    }
     func reloadCatalog() {
         guard !catalogLoading else { return }
         catalogLoading = true

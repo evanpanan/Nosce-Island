@@ -65,11 +65,11 @@ struct MarketWidgetView: View {
     private var upgradePrompt: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Nosce Island Pro", systemImage: "sparkles").font(.headline).foregroundStyle(MarketPalette.accent)
-            Text(widgetText("中、大号多资产小组件属于 Pro", "Medium and large multi-asset widgets are included in Pro")).font(.subheadline)
-            Text(widgetText("免费版可使用小号单资产小组件。点此查看权益与恢复购买。", "Free includes a small single-asset widget. Tap to view plans or restore purchases."))
+            Text(widgetText("中、大号小组件需 Pro", "Medium and large widgets need Pro")).font(.subheadline)
+            Text(widgetText("免费版支持小号小组件。", "Free includes the small widget."))
                 .font(.caption).foregroundStyle(.secondary)
             Spacer(minLength: 0)
-            Label(widgetText("查看 Pro 权益", "Explore Pro"), systemImage: "arrow.up.right").font(.caption).foregroundStyle(MarketPalette.accent)
+            Label(widgetText("查看 Pro", "Explore Pro"), systemImage: "arrow.up.right").font(.caption).foregroundStyle(MarketPalette.accent)
         }
     }
     private var content: some View {
@@ -92,7 +92,7 @@ struct MarketWidgetView: View {
             if let item = items.first {
                 Text(item.symbol).font(.title2.bold()).lineLimit(1).minimumScaleFactor(0.7)
                 if let quote = entry.snapshot.quote(for: item.id) {
-                    Text(quote.formattedPrice).foregroundStyle(changeColor(quote)).font(.system(size: 23, weight: .semibold, design: .rounded))
+                    Text(quote.formattedPrice).foregroundStyle(changeColor(quote)).font(.system(size: 23, weight: .semibold))
                         .monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                     HStack(spacing: 5) {
                         Text(quote.formattedChange).foregroundStyle(changeColor(quote))
