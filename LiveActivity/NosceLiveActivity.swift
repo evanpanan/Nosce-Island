@@ -1,6 +1,7 @@
 import WidgetKit
 import SwiftUI
 import ActivityKit
+import UIKit
 
 @main struct NosceWidgets: WidgetBundle {
     var body: some Widget {
@@ -47,7 +48,8 @@ struct NosceLiveActivity: Widget {
                         Text(quote.symbol)
                             .font(.system(size: 10, weight: .semibold))
                             .lineLimit(1).minimumScaleFactor(0.8)
-                    }.frame(width: 32, alignment: .leading)
+                    }.frame(width: compactSymbolWidth(quote, warning: context.isStale || quote.isStale(at: Date())), alignment: .leading)
+                        .accessibilityLabel(quote.symbol)
                 }
             } compactTrailing: {
                 if let quote = context.state.visibleQuotes.first {
@@ -55,7 +57,7 @@ struct NosceLiveActivity: Widget {
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .lineLimit(1).minimumScaleFactor(0.8)
                         .foregroundStyle(priceColor(quote, redUp: context.state.redUp))
-                        .frame(width: 68, alignment: .trailing)
+                        .frame(width: compactPriceWidth(quote), alignment: .trailing)
                         .environment(\.colorScheme, .dark)
                         .accessibilityLabel(quote.symbol + " " + quote.formattedPrice)
                 }
@@ -69,6 +71,18 @@ struct NosceLiveActivity: Widget {
             .widgetURL(URL(string: "nosceisland://watch"))
             .keylineTint(MarketPalette.accent)
         }
+    }
+    // Reserve only the space the current text needs, rather than the widest possible quote.
+    // iOS still chooses the overall Island dimensions and presentation.
+    private func compactSymbolWidth(_ quote: IslandQuote, warning: Bool) -> CGFloat {
+        let font = UIFont.systemFont(ofSize: 10, weight: .semibold)
+        let width = (quote.symbol as NSString).size(withAttributes: [.font: font]).width
+        return min(40, max(14, ceil(width) + (warning ? 10 : 0)))
+    }
+    private func compactPriceWidth(_ quote: IslandQuote) -> CGFloat {
+        let font = UIFont.monospacedSystemFont(ofSize: 11, weight: .medium)
+        let width = (quote.compactPrice as NSString).size(withAttributes: [.font: font]).width
+        return min(68, max(24, ceil(width) + 1))
     }
     private func priceColor(_ quote: IslandQuote, redUp: Bool) -> Color {
         MarketPalette.price(quote.priceTone(redUp: redUp), darkSurface: true)
