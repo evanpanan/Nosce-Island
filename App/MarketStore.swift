@@ -18,7 +18,6 @@ func tr(_ chinese: String, _ english: String) -> String {
     }
     @Published var showPro = false
     @Published var proExpiresAt: Date? = UserDefaults.standard.object(forKey: "verifiedProExpiryV1") as? Date
-    @Published var watchID = UserDefaults.standard.string(forKey: "singleWatchIDV1") ?? "hl:BTC"
     private var membershipExpiryTask: Task<Void, Never>?
     private var membershipRefreshTask: Task<Void, Never>?
     @Published var activityRunning = false
@@ -47,7 +46,7 @@ func tr(_ chinese: String, _ english: String) -> String {
     var isPro: Bool { access.isPro }
     var watchlistLimit: Int { access.watchlistLimit }
     var activeSelected: [String] { Array(selected.prefix(watchlistLimit)) }
-    var activityIDs: [String] { isPro ? activeSelected : [activeSelected.contains(watchID) ? watchID : (activeSelected.first ?? "hl:BTC")] }
+    var activityIDs: [String] { access.displayIDs(in: selected) }
     var savedInstruments: [Instrument] { selected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
     private func applyMembership(_ profile: AccountProfile?) {
         let before = access.isPro
@@ -76,12 +75,6 @@ func tr(_ chinese: String, _ english: String) -> String {
         if activityRunning || activityStarting { await endActivity() }
         syncWidgets(force: true)
         if foreground { startRefreshing() }
-    }
-    func chooseWatch(_ id: String) {
-        guard activeSelected.contains(id), !activityRunning, !activityStarting else { return }
-        watchID = id
-        UserDefaults.standard.set(id, forKey: "singleWatchIDV1")
-        syncWidgets(force: true)
     }
     private var streamTask: Task<Void, Never>?
     private var heartbeat: Task<Void, Never>?

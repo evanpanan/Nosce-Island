@@ -115,6 +115,10 @@ struct MembershipAccess: Equatable {
     init(expiresAt: Date?, at date: Date = Date()) { isPro = expiresAt.map { $0 > date } ?? false }
     var watchlistLimit: Int { isPro ? 8 : 3 }
     var islandLimit: Int { isPro ? 8 : 1 }
+    // The visible watchlist order is the sole source of display priority for both plans.
+    func displayIDs(in saved: [String]) -> [String] {
+        Array(saved.prefix(watchlistLimit).prefix(islandLimit))
+    }
 }
 
 /// Read-only capability for independently rechecking the widget's verified plan, including refunds.

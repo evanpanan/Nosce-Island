@@ -70,7 +70,7 @@ struct ContentView: View {
                         .background(.black,in:RoundedRectangle(cornerRadius:24)).environment(\.colorScheme, .dark).padding(.horizontal,20)
                     HStack {
                         Image(systemName: "hand.draw").foregroundStyle(.secondary)
-                        Text(store.isPro ? tr("Pro · 最多 8 个资产逐个轮播，长按展开。", "Pro · up to 8 assets, rotating one at a time.") : tr("免费版 · 单资产灵动岛。Pro 可轮播最多 8 个资产。", "Free · one island asset. Pro rotates up to 8."))
+                        Text(store.isPro ? tr("Pro · 最多 8 个资产逐个轮播，长按展开。", "Pro · up to 8 assets, rotating one at a time.") : tr("免费版显示列表首位，Pro 按列表顺序轮播。", "Free shows the first asset. Pro rotates in list order."))
                             .font(.caption).foregroundStyle(.secondary)
                     }
                 }.padding(20).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26))
@@ -81,14 +81,11 @@ struct ContentView: View {
                         .accessibilityLabel(tr("添加资产", "Add instrument"))
                 }
                 if !store.isPro {
-                    Picker(tr("灵动岛与小号小组件显示", "Island and small widget asset"), selection: Binding(get: { store.activityIDs.first ?? "hl:BTC" }, set: { store.chooseWatch($0) })) {
-                        ForEach(store.chosen) { item in Text(item.symbol).tag(item.id) }
-                    }.disabled(store.activityRunning || store.activityStarting)
                     Button(tr("查看 Pro 多资产权益", "Explore Pro multi-asset watching")) { store.showPro = true }.font(.caption)
                 }
                 Text(store.connection).font(.caption).foregroundStyle(.secondary)
                 if store.chosen.count > 1 {
-                    Text(tr("长按卡片拖动排序 · 与自选、轮播和小组件同步", "Hold and drag to reorder · shared with your watchlist and widgets"))
+                    Text(store.isPro ? tr("长按卡片拖动排序 · 按顺序轮播", "Hold and drag to reorder · rotate in list order") : tr("长按卡片拖动排序 · 免费版展示第一位", "Hold and drag to reorder · Free shows the first asset"))
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 ForEach(store.chosen) { item in
@@ -241,7 +238,7 @@ struct ContentView: View {
             .onMove { store.moveSelected(from: $0, to: $1) }
             .moveDisabled(store.activityStarting)
         } header: { Text(tr("我的自选", "My watchlist")) }
-          footer: { Text(tr("点击编辑，拖动右侧把手排序。顺序会自动保存，并用于盯盘、灵动岛轮播与小组件。", "Tap Edit, then drag a handle. Order is saved automatically and shared with watching, Island rotation and widgets.")) }
+          footer: { Text(tr("点击编辑，拖动右侧把手排序。顺序自动保存；免费版显示第一位，Pro 按顺序轮播，小组件同序。", "Tap Edit, then drag a handle. Order is saved. Free shows the first asset; Pro rotates in order. Widgets follow the same order.")) }
     }
     private var matchingAssets: [Instrument] {
         store.catalog.filter { item in

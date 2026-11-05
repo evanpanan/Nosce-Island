@@ -41,6 +41,16 @@ final class WidgetFixtureProtocol: URLProtocol {
         precondition(MembershipAccess(expiresAt: nil, at: now).watchlistLimit == 3)
         precondition(MembershipAccess(expiresAt: now.addingTimeInterval(60), at: now).islandLimit == 8)
         precondition(MembershipAccess(expiresAt: now, at: now).islandLimit == 1)
+        let freeAccess = MembershipAccess(expiresAt: nil, at: now)
+        let proAccess = MembershipAccess(expiresAt: now.addingTimeInterval(60), at: now)
+        let stockFirst = ["stock:NASDAQ:XMAX", "hl:BTC", "bn:SOLUSDT"]
+        precondition(freeAccess.displayIDs(in: stockFirst) == ["stock:NASDAQ:XMAX"])
+        precondition(proAccess.displayIDs(in: stockFirst) == stockFirst)
+        let btcFirst = WatchlistOrder.moving(stockFirst, from: IndexSet(integer: 1), to: 0)
+        precondition(freeAccess.displayIDs(in: btcFirst) == ["hl:BTC"])
+        precondition(proAccess.displayIDs(in: btcFirst) == btcFirst)
+        precondition(freeAccess.displayIDs(in: []).isEmpty)
+        precondition(proAccess.displayIDs(in: Array(repeating: "asset", count: 9)).count == 8)
         let btc = WidgetWatchItem(id: "hl:BTC", symbol: "BTC", currency: "USD")
         let eth = WidgetWatchItem(id: "bn:ETHUSDT", symbol: "ETH", currency: "USDT")
         let old = IslandQuote(id: btc.id, symbol: btc.symbol, price: 100, change: nil, currency: "USD",
