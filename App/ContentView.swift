@@ -41,39 +41,13 @@ struct ContentView: View {
                 HStack {
                     HStack(spacing: 8) { Image("WaveMark").resizable().scaledToFit().frame(width: 28, height: 28); Text("NOSCE ISLAND").font(.caption.bold()).tracking(2) }
                     Spacer()
-                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.1").font(.caption2.monospaced()).foregroundStyle(.secondary)
+                    Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—").font(.caption2.monospaced()).foregroundStyle(.secondary)
                 }.foregroundStyle(MarketPalette.accent)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(tr("行情，抬眼即见。", "Markets. At a glance.")).font(.largeTitle.bold())
                     Text(tr("无强制广告 · 无付费倒计时", "No forced ads. No paid countdown."))
                         .font(.subheadline).foregroundStyle(.secondary)
                 }
-                VStack(spacing: 20) {
-                    HStack {
-                        Text(tr("灵动岛预览", "ISLAND PREVIEW")).font(.caption.bold()).foregroundStyle(.secondary)
-                        Spacer()
-                        Text(tr("真实行情", "MARKET DATA"))
-                            .font(.caption2.bold()).foregroundStyle(MarketPalette.accent)
-                    }
-                    VStack(spacing:3) {
-                        ForEach(store.visibleInstruments) { item in
-                            HStack(spacing:8) {
-                                Image("WaveMark").resizable().scaledToFit().frame(width:16,height:16)
-                                Text(item.symbol).font(.caption.bold())
-                                Spacer(minLength:4)
-                                Text(store.quotes[item.id]?.formattedPrice ?? "—")
-                                    .foregroundStyle(store.color(store.quotes[item.id]?.change))
-                                    .font(.caption.monospacedDigit().bold()).lineLimit(1).minimumScaleFactor(0.6)
-                            }
-                        }
-                    }.padding(.horizontal,20).padding(.vertical,10)
-                        .background(.black,in:RoundedRectangle(cornerRadius:24)).environment(\.colorScheme, .dark).padding(.horizontal,20)
-                    HStack {
-                        Image(systemName: "hand.draw").foregroundStyle(.secondary)
-                        Text(store.isPro ? tr("Pro · 最多 8 个资产逐个轮播，长按展开。", "Pro · up to 8 assets, rotating one at a time.") : tr("免费版显示列表首位，Pro 按列表顺序轮播。", "Free shows the first asset. Pro rotates in list order."))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                }.padding(20).background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 26))
                 HStack {
                     Text(tr("正在关注", "Your watch")).font(.title3.bold())
                     Spacer()
@@ -328,7 +302,7 @@ struct ContentView: View {
                 Button(tr("删除设备服务数据", "Delete device service data"), role: .destructive) { Task { await store.deleteServiceData() } }
             }
             Section {
-                Text("Nosce Island · " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.7.0")).font(.subheadline.bold())
+                Text("Nosce Island · " + (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "—")).font(.subheadline.bold())
                 Text(tr("合约：币安 / Hyperliquid 标记价，无同口径参考价时不显示涨跌幅。独立股票：按标注的数据源展示；Alpaca IEX 涨跌以 IEX 前一交易日日线收盘价为参考。币安和股票保留上游报价时间；Hyperliquid 显示服务器接收时间。", "Perpetuals: Binance / Hyperliquid mark prices; change is unavailable without a matching reference. Stocks use the labelled source; Alpaca IEX changes use the previous IEX daily close. Binance and stocks preserve upstream timestamps; Hyperliquid uses server receipt time."))
                     .font(.caption).foregroundStyle(.secondary)
             }

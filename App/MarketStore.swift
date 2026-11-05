@@ -182,10 +182,6 @@ func tr(_ chinese: String, _ english: String) -> String {
     }
     var chosen: [Instrument] { activeSelected.map { id in catalog.first { $0.id == id } ?? Instrument(id: id) } }
     var islandQuotes: [IslandQuote] { activityIDs.compactMap { quotes[$0] } }
-    var visibleInstruments: [Instrument] {
-        let index = observed?.content.state.pageIndex ?? 0
-        return Array(activityIDs.dropFirst(index).prefix(1)).map { id in catalog.first { $0.id == id } ?? Instrument(id: id) }
-    }
     func color(_ change: Double?) -> Color {
         MarketPalette.price(IslandQuote.priceTone(change: change, redUp: redUp))
     }
