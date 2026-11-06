@@ -68,41 +68,49 @@ document.querySelectorAll('[data-billing]').forEach(button=>button.addEventListe
 (async()=>{try{const response=await fetch('/api/public/plans',{credentials:'omit',signal:AbortSignal.timeout(8000)});if(!response.ok)return;const plans=await response.json();if(plans.referenceCurrency==='USD'&&Number.isFinite(plans.monthly)&&plans.monthly>0&&Number.isFinite(plans.yearly)&&plans.yearly>0){planPrices={monthly:plans.monthly,yearly:plans.yearly};renderPlanPrice();}}catch{/* Keep labelled reference prices; no purchase is performed here. */}})();
 
 
-// One update per pointer frame, no idle animation or device-orientation tracking.
-const phoneMotion=document.querySelector('.phone-motion');
-const phoneMotionAllowed=matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)');
-let phoneMotionFrame=null,phoneMotionBounds=null,phoneMotionPoint=null;
-function resetPhoneMotion(){
- if(phoneMotionFrame!==null)cancelAnimationFrame(phoneMotionFrame);
- phoneMotionFrame=null;phoneMotionBounds=null;phoneMotionPoint=null;
- phoneMotion.classList.remove('is-tilting');
- phoneMotion.style.removeProperty('--phone-rx');phoneMotion.style.removeProperty('--phone-ry');
+// One update per pointer frame, shared by the phone and every widget size.
+const pointerTiltAllowed=matchMedia('(hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference)');
+const resetPointerTilts=[];
+function attachPointerTilt(surface,prefix){
+ if(!surface)return;
+ let frame=null,point=null;
+ function reset(){
+  if(frame!==null)cancelAnimationFrame(frame);
+  frame=null;point=null;
+  surface.classList.remove('is-tilting');
+  surface.style.removeProperty(prefix+'rx');surface.style.removeProperty(prefix+'ry');
+ }
+ function follow(event){
+  if(event.pointerType!=='mouse'||!pointerTiltAllowed.matches||document.hidden)return;
+  point={x:event.clientX,y:event.clientY};
+  if(frame!==null)return;
+  frame=requestAnimationFrame(()=>{
+   frame=null;
+   if(!point||!pointerTiltAllowed.matches)return;
+   // Measure the stable wrapper, including any in-progress size transition.
+   const rect=surface.getBoundingClientRect();
+   if(!rect.width||!rect.height)return;
+   const x=Math.max(-1,Math.min(1,(point.x-rect.left)/rect.width*2-1));
+   const y=Math.max(-1,Math.min(1,(point.y-rect.top)/rect.height*2-1));
+   surface.classList.add('is-tilting');
+   surface.style.setProperty(prefix+'rx',(-y*4.5).toFixed(2)+'deg');
+   surface.style.setProperty(prefix+'ry',(x*6).toFixed(2)+'deg');
+  });
+ }
+ surface.addEventListener('pointerenter',follow);
+ surface.addEventListener('pointermove',follow);
+ surface.addEventListener('pointerleave',reset);
+ surface.addEventListener('pointercancel',reset);
+ resetPointerTilts.push(reset);
 }
-function followPhonePointer(event){
- if(event.pointerType!=='mouse'||!phoneMotionAllowed.matches||document.hidden)return;
- phoneMotionBounds??=phoneMotion.getBoundingClientRect();
- phoneMotionPoint={x:event.clientX,y:event.clientY};
- if(phoneMotionFrame!==null)return;
- phoneMotionFrame=requestAnimationFrame(()=>{
-  phoneMotionFrame=null;
-  if(!phoneMotionPoint||!phoneMotionBounds||!phoneMotionAllowed.matches)return;
-  const rect=phoneMotionBounds;
-  if(!rect.width||!rect.height)return;
-  const x=Math.max(-1,Math.min(1,(phoneMotionPoint.x-rect.left)/rect.width*2-1));
-  const y=Math.max(-1,Math.min(1,(phoneMotionPoint.y-rect.top)/rect.height*2-1));
-  phoneMotion.classList.add('is-tilting');
-  phoneMotion.style.setProperty('--phone-rx',(-y*4.5).toFixed(2)+'deg');
-  phoneMotion.style.setProperty('--phone-ry',(x*6).toFixed(2)+'deg');
- });
-}
-phoneMotion.addEventListener('pointerenter',followPhonePointer);
-phoneMotion.addEventListener('pointermove',followPhonePointer);
-phoneMotion.addEventListener('pointerleave',resetPhoneMotion);
-phoneMotion.addEventListener('pointercancel',resetPhoneMotion);
-phoneMotionAllowed.addEventListener('change',resetPhoneMotion);
-window.addEventListener('blur',resetPhoneMotion);
-window.addEventListener('resize',resetPhoneMotion);
-window.addEventListener('scroll',resetPhoneMotion,{passive:true});
-window.addEventListener('pagehide',resetPhoneMotion);
-document.addEventListener('visibilitychange',()=>{if(document.hidden)resetPhoneMotion();});
-document.addEventListener('keydown',event=>{if(event.key==='Tab'||event.key==='Escape')resetPhoneMotion();});
+attachPointerTilt(document.querySelector('.phone-motion'),'--phone-');
+attachPointerTilt(document.querySelector('.widget-motion'),'--tilt-');
+function resetAllPointerTilts(){resetPointerTilts.forEach(reset=>reset());}
+pointerTiltAllowed.addEventListener('change',resetAllPointerTilts);
+window.addEventListener('blur',resetAllPointerTilts);
+window.addEventListener('resize',resetAllPointerTilts);
+window.addEventListener('scroll',resetAllPointerTilts,{passive:true});
+window.addEventListener('pagehide',resetAllPointerTilts);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)resetAllPointerTilts();});
+document.addEventListener('keydown',event=>{if(event.key==='Tab'||event.key==='Escape')resetAllPointerTilts();});
+document.querySelectorAll('.size-switch button').forEach(button=>button.addEventListener('click',resetAllPointerTilts));

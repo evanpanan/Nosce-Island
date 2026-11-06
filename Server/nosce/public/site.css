@@ -18,3 +18,13 @@
 @media(max-width:760px){.phone-motion{width:264px;height:469px}}
 @media(max-width:360px){.phone-motion{width:250px}}
 @media(hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.phone-motion>.phone{transform:none;will-change:auto}}
+
+/* Keep the widget hit area still while its card tilts, across all three sizes. */
+.widget-motion{--tilt-rx:0deg;--tilt-ry:0deg;width:420px;max-width:calc(100% - 34px);perspective:1100px;transition:width .45s}
+.widget-motion:has([data-size=small]){width:190px}
+.widget-motion:has([data-size=large]){width:330px}
+.widget-motion>.market-widget{width:100%;max-width:none;transform:rotateX(var(--tilt-rx)) rotateY(var(--tilt-ry));transform-origin:center;backface-visibility:hidden;transition:height .45s,transform 650ms cubic-bezier(.2,.7,.2,1)}
+.widget-motion.is-tilting>.market-widget{transition:height .45s,transform 180ms ease-out;will-change:transform}
+@media(max-width:1050px){.widget-motion{width:340px}}
+@media(max-width:760px){.widget-motion{width:390px}.widget-motion:has([data-size=large]){max-width:calc(100% - 60px)}}
+@media(hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.widget-motion>.market-widget{transform:none;will-change:auto}}
