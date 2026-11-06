@@ -9,3 +9,12 @@
 /* The demo and its controls form one unit, on every screen size. */
 .widget-demo{min-width:0}.widget-controls{text-align:center;padding-top:24px}.widget-controls .size-switch{background:#f3f5ef80}.widget-controls .widget-caption{margin:14px 0 0}.widget-controls .fine-print{margin:8px 0 0}.stage-label{letter-spacing:.5px;font-size:11px}.story-copy{align-self:center}.story-copy>p{font-size:18px}.pricing-terms{margin-top:28px}.pricing-terms summary{font-size:12px;color:var(--muted);padding-block:18px}.pricing-terms p{font-size:12px}.pricing-heading .eyebrow,.download-heading .eyebrow,.faq .eyebrow{font-size:11px}.eyebrow{letter-spacing:1px}h1,h2,h3,button,input,select,textarea{font-family:inherit}
 @media(max-width:760px){.widget-controls{padding-top:20px}.story-copy>p{font-size:16px}.size-switch button{min-width:80px;padding:10px 18px}}
+
+/* Pointer-driven motion is confined to the phone; the hover target itself stays still. */
+.phone-motion{--phone-rx:0deg;--phone-ry:0deg;width:278px;height:493px;margin-inline:auto;perspective:1100px}
+.phone-motion>.phone{margin:0;transform:rotateX(var(--phone-rx)) rotateY(var(--phone-ry));transform-origin:center;transition:transform 650ms cubic-bezier(.2,.7,.2,1);backface-visibility:hidden}
+.phone-motion.is-tilting>.phone{transition-duration:180ms;transition-timing-function:ease-out;will-change:transform}
+@media(min-width:1450px){.phone-motion{margin-top:35px}}
+@media(max-width:760px){.phone-motion{width:264px;height:469px}}
+@media(max-width:360px){.phone-motion{width:250px}}
+@media(hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.phone-motion>.phone{transform:none;will-change:auto}}
