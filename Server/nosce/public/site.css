@@ -23,10 +23,17 @@
 .widget-motion{--tilt-rx:0deg;--tilt-ry:0deg;width:420px;max-width:calc(100% - 34px);perspective:1100px;transition:width .45s}
 .widget-motion:has([data-size=small]){width:190px}
 .widget-motion:has([data-size=large]){width:330px}
-.widget-motion>.market-widget{width:100%;max-width:none;transform:rotateX(var(--tilt-rx)) rotateY(var(--tilt-ry));transform-origin:center;backface-visibility:hidden;transition:height .45s,transform 650ms cubic-bezier(.2,.7,.2,1)}
+.widget-motion>.market-widget[data-size]{width:100%;max-width:100%;transform:rotateX(var(--tilt-rx)) rotateY(var(--tilt-ry));transform-origin:center;backface-visibility:hidden;transition:height .45s,transform 650ms cubic-bezier(.2,.7,.2,1)}
 .widget-motion.is-tilting>.market-widget{transition:height .45s,transform 180ms ease-out;will-change:transform}
 @media(max-width:1050px){.widget-motion{width:340px}}
 @media(max-width:760px){.widget-motion{width:390px}.widget-motion:has([data-size=large]){max-width:calc(100% - 60px)}}
 @media(hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.widget-motion>.market-widget{transform:none;will-change:auto}}
 
 .asset-logo{object-fit:contain;background:transparent}.asset-name{display:inline-flex;align-items:center;gap:7px}.asset-name img{flex:none;object-fit:contain;border-radius:50%}.market-widget[data-size=small] .asset-name img{width:18px;height:18px}
+
+/* Give grid items a shrinkable track so intrinsic card width cannot crop on phones. */
+.widget-stage{grid-template-columns:minmax(0,1fr)}
+.widget-motion{min-width:0;justify-self:center}
+.island-asset-logo{width:14px;height:14px;object-fit:contain;border-radius:50%;flex:none}
+.expanded-price>b{display:inline-flex;align-items:center;gap:6px}
+.expanded-price .island-asset-logo{width:18px;height:18px}

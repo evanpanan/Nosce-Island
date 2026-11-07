@@ -38,6 +38,7 @@ function scheduleMarketRender(){if(!marketRenderTimer)marketRenderTimer=setTimeo
 function renderMarket(){
  const quotes=feedMode==='live'?liveQuotes:simulatedQuotes,quote=quotes[current],now=Date.now(),modeHistory=histories[feedMode];
  document.querySelectorAll('[data-symbol]').forEach(item=>item.textContent=current);
+ document.querySelectorAll('[data-island-logo]').forEach(item=>item.setAttribute('src','/site-assets/asset-'+current.toLowerCase()+'.svg'));
  document.querySelectorAll('[data-price]').forEach(item=>{item.textContent=quote?currency.format(quote.price):'—';item.classList.toggle('down',!!quote&&quote.change<0);});
  $('island-change').textContent=quote?formatChange(quote.change):'—';$('island-change').classList.toggle('down',!!quote&&quote.change<0);
  document.querySelectorAll('[data-widget-price],[data-list-price],[data-widget-change],[data-list-change]').forEach(item=>{const symbol=item.dataset.widgetPrice||item.dataset.listPrice||item.dataset.widgetChange||item.dataset.listChange,q=quotes[symbol],isPrice=item.hasAttribute('data-widget-price')||item.hasAttribute('data-list-price');item.textContent=q?(isPrice?currency.format(q.price):formatChange(q.change)):'—';item.classList.toggle('down',!!q&&q.change<0);if(item.hasAttribute('data-list-price')){const parent=item.closest('.quote-value');parent.classList.toggle('negative',!!q&&q.change<0);parent.classList.toggle('positive',!q||q.change>=0);}});

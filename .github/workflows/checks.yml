@@ -53,3 +53,14 @@ jobs:
         working-directory: Server
         env:
           NOSCE_TEST_POSTGRES: postgresql://postgres:test-only-password@localhost:5432/nosce_test
+
+  website-layout:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - run: node Tests/Web/responsive-layout.cjs

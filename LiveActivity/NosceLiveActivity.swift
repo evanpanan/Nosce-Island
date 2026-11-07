@@ -42,6 +42,7 @@ struct NosceLiveActivity: Widget {
             } compactLeading: {
                 if let quote = context.state.visibleQuotes.first {
                     HStack(spacing: 2) {
+                        IslandAssetLogo(quote: quote, size: 12)
                         if context.isStale || quote.isStale(at: Date()) {
                             Image(systemName: "clock").font(.system(size: 8)).foregroundStyle(.orange)
                         }
@@ -64,8 +65,8 @@ struct NosceLiveActivity: Widget {
             } minimal: {
                 if context.isStale {
                     Image(systemName: "exclamationmark.circle").foregroundStyle(.orange)
-                } else {
-                    Image(systemName:"waveform.path").frame(width:18,height:18)
+                } else if let quote = context.state.visibleQuotes.first {
+                    IslandAssetLogo(quote: quote, size: 18)
                 }
             }
             .widgetURL(URL(string: "nosceisland://watch"))
@@ -77,7 +78,7 @@ struct NosceLiveActivity: Widget {
     private func compactSymbolWidth(_ quote: IslandQuote, warning: Bool) -> CGFloat {
         let font = UIFont.systemFont(ofSize: 10, weight: .semibold)
         let width = (quote.symbol as NSString).size(withAttributes: [.font: font]).width
-        return min(40, max(14, ceil(width) + (warning ? 10 : 0)))
+        return min(54, max(28, ceil(width) + 14 + (warning ? 10 : 0)))
     }
     private func compactPriceWidth(_ quote: IslandQuote) -> CGFloat {
         let font = UIFont.monospacedSystemFont(ofSize: 11, weight: .medium)
@@ -105,7 +106,10 @@ struct NosceLiveActivity: Widget {
     private func row(_ quote: IslandQuote, redUp: Bool) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(quote.symbol).font(.headline)
+                HStack(spacing: 6) {
+                    IslandAssetLogo(quote: quote, size: 20)
+                    Text(quote.symbol).font(.headline)
+                }
                 Text((quote.basis == "mark" ? local("合约 · ", "PERP · ") : quote.currency + " · ") + (quote.isStale(at:Date()) ? local("已过期", "STALE") : quote.statusLabel) + " · " + quote.updatedAt.formatted(date: .omitted, time: .standard))
                     .font(.caption2).foregroundStyle(.secondary)
             }
@@ -117,5 +121,33 @@ struct NosceLiveActivity: Widget {
                     .foregroundStyle(priceColor(quote, redUp: redUp))
             }
         }
+    }
+}
+
+/// Local bundled marks are available offline in the widget extension as well as the app.
+private struct IslandAssetLogo: View {
+    let quote: IslandQuote
+    let size: CGFloat
+    private var assetName: String? {
+        let symbol = quote.symbol.uppercased()
+        if quote.id.hasPrefix("stock:") {
+            let stocks = ["XMAX", "AAPL", "TSLA", "NVDA", "MSFT", "GOOG", "GOOGL", "AMZN", "META"]
+            return stocks.contains(symbol) ? "Asset-" + (symbol == "GOOG" ? "GOOGL" : symbol) : nil
+        }
+        var base = symbol
+        if quote.id.hasPrefix("bn:"), base.hasSuffix("USDT") { base = String(base.dropLast(4)) }
+        let coins = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "USDT", "USDC"]
+        return coins.contains(base) ? "Asset-" + base : nil
+    }
+    var body: some View {
+        Group {
+            if let name = assetName {
+                Image(name).renderingMode(.original).resizable().scaledToFit().background(Color.white)
+            } else {
+                Text(String(quote.symbol.prefix(1)))
+                    .font(.system(size: size * 0.65, weight: .semibold))
+                    .frame(width: size, height: size).background(Color.gray.opacity(0.3))
+            }
+        }.frame(width: size, height: size).clipShape(Circle()).accessibilityHidden(true)
     }
 }
