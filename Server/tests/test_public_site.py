@@ -17,7 +17,7 @@ def test_public_home_assets_and_live_downloads_are_separate_from_admin(tmp_path)
         assert not home.history and 'Location' not in home.headers
         assert "script-src 'self'" in home.headers['Content-Security-Policy']
         assert "wss://api.hyperliquid.xyz" in home.headers['Content-Security-Policy']
-        for name in ['site.css', 'site.js', 'market-feed.js', 'mark.svg']:
+        for name in ['site.css', 'site.js', 'market-feed.js', 'mark.svg', 'asset-btc.svg', 'asset-eth.svg', 'asset-sol.svg', 'asset-nvda.svg', 'asset-xmax.png']:
             response = client.get('/site-assets/' + name)
             assert response.status_code == 200
             assert 'public, max-age=' in response.headers['Cache-Control']

@@ -28,3 +28,5 @@
 @media(max-width:1050px){.widget-motion{width:340px}}
 @media(max-width:760px){.widget-motion{width:390px}.widget-motion:has([data-size=large]){max-width:calc(100% - 60px)}}
 @media(hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){.widget-motion>.market-widget{transform:none;will-change:auto}}
+
+.asset-logo{object-fit:contain;background:transparent}.asset-name{display:inline-flex;align-items:center;gap:7px}.asset-name img{flex:none;object-fit:contain;border-radius:50%}.market-widget[data-size=small] .asset-name img{width:18px;height:18px}

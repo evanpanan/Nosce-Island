@@ -134,7 +134,7 @@ struct ContentView: View {
     }
     private func quoteIdentity(_ item: Instrument) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(item.symbol).font(.title3.weight(.semibold))
+            HStack(spacing: 9) { AssetLogo(item: item); Text(item.symbol).font(.title3.weight(.semibold)) }
             Text([item.typeLabel, item.exchange].filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.caption).foregroundStyle(.secondary).lineLimit(2)
         }
@@ -248,6 +248,7 @@ struct ContentView: View {
         Section {
             ForEach(store.savedInstruments) { item in
                 HStack(spacing: 12) {
+                    AssetLogo(item: item)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(item.symbol).font(.headline).foregroundStyle(.primary)
                         Text(assetDescription(item)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -290,7 +291,8 @@ struct ContentView: View {
     private func assetSelectionButton(_ item: Instrument) -> some View {
         let selected = store.selected.contains(item.id)
         return Button { store.toggle(item) } label: {
-            HStack {
+            HStack(spacing: 12) {
+                AssetLogo(item: item)
                 VStack(alignment: .leading, spacing: 5) {
                     Text(item.symbol).font(.headline).foregroundStyle(.primary)
                     Text(assetDescription(item)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
@@ -614,5 +616,35 @@ struct Sparkline: Shape {
                 if index == 0 { path.move(to: point) } else { path.addLine(to: point) }
             }
         }
+    }
+}
+
+
+/// Curated local marks: resolve by asset class, never guess a company from a domain.
+private struct AssetLogo: View {
+    let item: Instrument
+    private var assetName: String? {
+        let symbol = item.symbol.uppercased()
+        if item.id.hasPrefix("stock:") || item.market == "US" {
+            let stocks = ["XMAX": "XMAX", "AAPL": "AAPL", "TSLA": "TSLA", "NVDA": "NVDA", "MSFT": "MSFT", "GOOG": "GOOGL", "GOOGL": "GOOGL", "AMZN": "AMZN", "META": "META"]
+            return stocks[symbol].map { "Asset-" + $0 }
+        }
+        guard item.market == "Crypto", !item.id.hasPrefix("stock:") else { return nil }
+        var base = symbol
+        if item.id.hasPrefix("bn:"), base.hasSuffix("USDT") { base = String(base.dropLast(4)) }
+        let coins: Set<String> = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK", "USDT", "USDC"]
+        return coins.contains(base) ? "Asset-" + base : nil
+    }
+    var body: some View {
+        Group {
+            if let name = assetName {
+                Image(name).renderingMode(.original).resizable().scaledToFit().background(Color.white)
+            } else {
+                ZStack {
+                    Circle().fill(Color(uiColor: .tertiarySystemFill))
+                    Text(String(item.symbol.prefix(3))).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary).minimumScaleFactor(0.7).lineLimit(1).padding(3)
+                }
+            }
+        }.frame(width: 30, height: 30).clipShape(Circle()).accessibilityHidden(true)
     }
 }

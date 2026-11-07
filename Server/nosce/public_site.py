@@ -7,6 +7,8 @@ from .plans import plan_catalog
 
 PUBLIC = Path(__file__).with_name('public')
 ASSETS = {'site.css': 'text/css', 'site.js': 'text/javascript', 'market-feed.js': 'text/javascript', 'mark.svg': 'image/svg+xml'}
+ASSETS.update({f'asset-{symbol}.svg': 'image/svg+xml' for symbol in ('btc', 'eth', 'sol', 'bnb', 'xrp', 'doge', 'ada', 'avax', 'link', 'usdt', 'usdc', 'aapl', 'tsla', 'msft', 'googl', 'amzn', 'meta', 'nvda')})
+ASSETS['asset-xmax.png'] = 'image/png'
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; "
        "connect-src 'self' https://api.hyperliquid.xyz wss://api.hyperliquid.xyz; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
 
